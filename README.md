@@ -97,6 +97,10 @@ Three eval sets, three jobs:
 | **NB7** | Deployment: merge, serve, measure | accuracy is one axis; latency and $/1k queries are the other two |
 | **NB8** | Capstone: weights vs harness, head to head | they're orthogonal — and the hybrid is what you ship |
 
+> 📐 **See [ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams: what is frozen
+> vs what learns, the training loop, the data flow, and the correspondence with
+> repo 1's harness loop.
+
 ## Setup
 
 **Training is Colab-only.** `bitsandbytes` on Windows is unreliable, and a
