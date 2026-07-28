@@ -100,6 +100,8 @@ Three eval sets, three jobs:
 > 📐 **See [ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams: what is frozen
 > vs what learns, the training loop, the data flow, and the correspondence with
 > repo 1's harness loop.
+>
+> 🖼️ Slide-ready SVG/PNG exports: [`docs/diagrams/`](docs/diagrams/)
 
 ## Setup
 
@@ -114,7 +116,7 @@ cd RL-Agents-Workshop-LLM
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt                       # local / CPU
 cp .env.example .env                                  # only WANDB_API_KEY is required
-pytest tests/ -q                                      # 132 tests, ~110s
+pytest tests/ -q                                      # 133 tests, ~110s
 ```
 
 On Colab each notebook's first cell clones and installs
@@ -193,8 +195,9 @@ llm_utils/
   evaluate_batch.py, datasets.py, trainers.py, metrics.py, plotting.py
 data/       generated tasks, leakage audit, pre-baked results
 nbsrc/      notebook cell definitions      notebooks/  generated .ipynb
+docs/diagrams/  slide-ready SVG + PNG, exported from the Mermaid sources
 scripts/    generate_tasks, review_sample, check_api_surface, run_*
-tests/      132 tests: parity, generator, rewards, MDP, statistics, notebooks
+tests/      133 tests: parity, generator, rewards, MDP, statistics, notebooks
 ```
 
 ## Cost

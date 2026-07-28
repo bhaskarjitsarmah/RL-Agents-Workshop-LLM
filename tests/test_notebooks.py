@@ -155,6 +155,39 @@ def test_referenced_scripts_exist():
     assert not missing, f"referenced but absent: {missing}"
 
 
+def test_diagram_exports_exist_and_match_the_docs():
+    """Every Mermaid block in the docs has a slide-ready SVG + PNG export.
+
+    Only checks presence and the source-block count, not pixels: re-rendering
+    needs Node, and a test that silently skips when Node is absent is worse than
+    one that checks what it can. `python scripts/export_diagrams.py --check`
+    does the byte comparison when you have the toolchain.
+    """
+    import re
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.join(root, "scripts"))
+    from export_diagrams import DIAGRAMS, FENCE  # noqa: E402
+
+    for stem, doc, idx, _title in DIAGRAMS:
+        found = FENCE.findall(open(os.path.join(root, doc), encoding="utf-8").read())
+        assert idx < len(found), (
+            f"{stem}: {doc} has {len(found)} mermaid blocks, wanted #{idx}. "
+            f"A diagram was removed or reordered -- update DIAGRAMS in "
+            f"scripts/export_diagrams.py")
+        for ext in (".svg", ".png"):
+            path = os.path.join(root, "docs", "diagrams", stem + ext)
+            assert os.path.exists(path), (
+                f"missing {stem + ext} -- run python scripts/export_diagrams.py")
+            assert os.path.getsize(path) > 2000, f"{stem + ext} looks truncated"
+
+    index = os.path.join(root, "docs", "diagrams", "README.md")
+    assert os.path.exists(index)
+    body = open(index, encoding="utf-8").read()
+    for stem, _doc, _idx, _t in DIAGRAMS:
+        assert stem in body, f"{stem} missing from the diagram index"
+
+
 @pytest.mark.parametrize("mod_name,filename", NOTEBOOKS)
 def test_training_notebooks_never_hard_require_a_gpu(mod_name, filename):
     """The no-GPU contract: no cell may call preflight(require_gpu=True).

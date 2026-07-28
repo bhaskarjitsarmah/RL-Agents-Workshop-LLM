@@ -10,6 +10,10 @@
 This document is the map. It connects the nine notebooks into one picture and
 shows what each one moves.
 
+> 🖼️ **Slide-ready exports** (SVG + PNG, 3x) of every diagram below live in
+> [`docs/diagrams/`](docs/diagrams/). Re-export after editing with
+> `python scripts/export_diagrams.py`.
+
 ---
 
 ## 1. The anatomy: what is frozen and what learns
@@ -18,7 +22,7 @@ shows what each one moves.
 flowchart TB
     User["NL question<br/>(Which product generated the most completed revenue?)"]
 
-    subgraph FROZEN["HARNESS — vendored from repo 1, byte-identical, hash-asserted"]
+    subgraph FROZEN["HARNESS · frozen"]
         C["baseline_prompt<br/>schema + question"]
         E["execution loop<br/>generate → run → repair ×2"]
         T["run_sql"]
@@ -26,8 +30,8 @@ flowchart TB
         V["score_sql<br/>execution match"]
     end
 
-    subgraph LEARN["POLICY — this is the only thing that moves"]
-        W["Qwen2.5-Coder-1.5B<br/>+ LoRA r=16<br/><b>θ = 18M params</b>"]
+    subgraph LEARN["POLICY · learns"]
+        W["Qwen2.5-Coder-1.5B + LoRA r=16<br/><b>θ = 18M params</b><br/><i>the only thing that moves</i>"]
     end
 
     User --> C --> W
