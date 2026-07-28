@@ -152,7 +152,7 @@ if CAP["gpu"]:
     print(lm.stats)
 else:
     res_base = baked("nb0_baselines",
-                     "run this notebook on a Colab T4")
+                  "python scripts/bake_all.py --stage baselines")
     if res_base:
         print(report_number(res_base["qwen_base"], "Qwen2.5-Coder-1.5B + repair"))
 """),

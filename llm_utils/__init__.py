@@ -63,7 +63,8 @@ from .rollout import (
 )
 from .metrics import (
     compare, error_taxonomy, mcnemar, paired_bootstrap, pass_at_k, report_number,
-    seed_summary, trajectory_efficiency, wilson_ci, zero_advantage_fraction,
+    robustness_suite, seed_summary, trajectory_efficiency, wilson_ci,
+    zero_advantage_fraction,
 )
 
 __all__ = [
@@ -95,5 +96,5 @@ __all__ = [
     # honest statistics
     "report_number", "wilson_ci", "paired_bootstrap", "mcnemar", "compare",
     "seed_summary", "pass_at_k", "zero_advantage_fraction",
-    "trajectory_efficiency", "error_taxonomy",
+    "trajectory_efficiency", "error_taxonomy", "robustness_suite",
 ]

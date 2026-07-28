@@ -292,6 +292,40 @@ def trajectory_efficiency(trajs) -> dict:
     }
 
 
+def robustness_suite(agent_fn, perturbed_path: str, db_path=None) -> dict:
+    """Accuracy on the 16 test questions and on four perturbations of them.
+
+    A policy tuned hard on one phrasing distribution can be brittle in ways the
+    clean number hides. The perturbations are generated once, hand-checked, and
+    frozen in `data/test_perturbed.json`, so these numbers are deterministic and
+    reproducible offline -- an LLM-generated paraphrase set regenerated per run
+    would make the comparison between checkpoints meaningless.
+
+    Returns {"clean": acc, "paraphrase": acc, "typo": acc, ...}.
+    """
+    import json
+
+    from .db import DB_PATH, score_sql
+
+    db_path = db_path or DB_PATH
+    with open(perturbed_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    out: dict[str, float] = {}
+    for kind, items in data.items():
+        if not items:
+            continue
+        correct = 0
+        for item in items:
+            try:
+                pred = agent_fn(item["question"])
+                correct += int(score_sql(pred, item["gold"], db_path))
+            except Exception:  # noqa: BLE001 - a crash scores 0, as in evaluate()
+                pass
+        out[kind] = correct / len(items)
+    return out
+
+
 def error_taxonomy(records) -> dict:
     """Why the failures failed -- the input to every 'what do we fix' decision.
 

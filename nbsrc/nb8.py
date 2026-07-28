@@ -76,7 +76,8 @@ if CAP["gpu"]:
         results["F hybrid"] = evaluate(make_local_agent(lm_grpo, extra=SKILLS),
                                        split="test")
 else:
-    results = baked("nb8_headtohead", "python scripts/run_headtohead.py   (on a GPU)")
+    results = baked("nb8_headtohead",
+                  "python scripts/bake_all.py --stage headtohead")
 
 for k in (results or {}):
     print(report_number(results[k], k))
@@ -120,7 +121,8 @@ claims, use val-200 and test_ext-169, where the intervals are ~±7pp instead of
 ~±20pp.
 """),
     code(r"""
-big = baked("nb8_bigsets", "python scripts/run_headtohead.py --big-sets")
+big = baked("nb8_bigsets",
+                  "python scripts/bake_all.py --stage bigsets")
 if big:
     for split in ("val", "test_ext"):
         print(f"\n--- {split} ---")
@@ -128,7 +130,8 @@ if big:
             print("  " + report_number(tuple(v), k))
 """),
     code(r"""
-seeds = baked("nb8_seeds", "python scripts/run_headtohead.py --seeds")
+seeds = baked("nb8_seeds",
+                  "python scripts/bake_all.py --stage bigsets")
 if seeds:
     from llm_utils.metrics import format_seed_summary, seed_summary
     print("Across 5 decoding seeds at T=0.7:")
@@ -169,7 +172,8 @@ if results and all(isinstance(v, dict) and "records" in v for v in results.value
 ## 6. Cost, latency, accuracy - all three axes
 """),
     code(r"""
-pts = baked("nb8_pareto", "python scripts/run_headtohead.py --pareto")
+pts = baked("nb8_pareto",
+                  "python scripts/bake_all.py --stage bigsets")
 if pts:
     from llm_utils.plotting import pareto
     pareto(pts, title="The decision surface: accuracy vs cost per 1k queries",

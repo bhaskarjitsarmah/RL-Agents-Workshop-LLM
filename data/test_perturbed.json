@@ -1,0 +1,412 @@
+{
+  "clean": [
+    {
+      "gold": "SELECT name FROM products WHERE category='Electronics';",
+      "id": 3,
+      "question": "Show all product names in the Electronics category."
+    },
+    {
+      "gold": "SELECT DISTINCT city FROM customers;",
+      "id": 5,
+      "question": "List all distinct cities where customers live."
+    },
+    {
+      "gold": "SELECT name FROM customers WHERE segment='Enterprise';",
+      "id": 8,
+      "question": "List the names of customers in the Enterprise segment."
+    },
+    {
+      "gold": "SELECT COUNT(*) FROM products WHERE category='Books';",
+      "id": 9,
+      "question": "How many products are in the Books category?"
+    },
+    {
+      "gold": "SELECT category, AVG(price) FROM products GROUP BY category;",
+      "id": 12,
+      "question": "What is the average product price per category? Return category and average price."
+    },
+    {
+      "gold": "SELECT strftime('%m', order_date) AS m, COUNT(*) FROM orders GROUP BY m;",
+      "id": 14,
+      "question": "How many orders were placed in each month of 2025? Return the month and the count."
+    },
+    {
+      "gold": "SELECT name FROM products WHERE product_id NOT IN (SELECT DISTINCT product_id FROM order_items);",
+      "id": 16,
+      "question": "List the names of products that have never been ordered."
+    },
+    {
+      "gold": "SELECT p.name, SUM(oi.quantity) FROM products p JOIN order_items oi ON oi.product_id=p.product_id GROUP BY p.product_id, p.name;",
+      "id": 18,
+      "question": "What is the total quantity ordered for each product? Return the product name and total quantity."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY p.product_id, p.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 22,
+      "question": "Which product generated the most completed revenue? Return only the product name."
+    },
+    {
+      "gold": "SELECT c.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN customers c ON c.customer_id=o.customer_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY c.customer_id, c.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 24,
+      "question": "Which customer has the highest total completed revenue? Return only the customer name."
+    },
+    {
+      "gold": "SELECT AVG(order_rev) FROM (SELECT o.order_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id);",
+      "id": 27,
+      "question": "What is the average order value (average total revenue per order) across completed orders?"
+    },
+    {
+      "gold": "SELECT p.category FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.category ORDER BY SUM(oi.quantity) DESC LIMIT 1;",
+      "id": 30,
+      "question": "What is the most popular product category by total quantity ordered across all orders? Return only the category."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.product_id, p.name HAVING AVG(oi.quantity)>2;",
+      "id": 33,
+      "question": "Which products have an average ordered quantity greater than 2? Return the product name."
+    },
+    {
+      "gold": "SELECT p.category, p.name FROM products p JOIN (SELECT category, MAX(price) mx FROM products GROUP BY category) m ON m.category=p.category AND p.price=m.mx;",
+      "id": 36,
+      "question": "Find the most expensive product in each category. Return the category and the product name."
+    },
+    {
+      "gold": "SELECT seg FROM (SELECT c.segment AS seg, AVG(t.order_rev) AS aov FROM (SELECT o.order_id, o.customer_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id) t JOIN customers c ON c.customer_id=t.customer_id GROUP BY c.segment ORDER BY aov DESC LIMIT 1);",
+      "id": 38,
+      "question": "Which customer segment has the highest average completed order value? Return only the segment."
+    },
+    {
+      "gold": "SELECT SUM(oi.quantity*p.price) AS total_rev, SUM(CASE WHEN o.status='completed' THEN oi.quantity*p.price ELSE 0 END) AS completed_rev FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id;",
+      "id": 40,
+      "question": "Return the total revenue across all orders and the completed-only revenue, as two columns."
+    }
+  ],
+  "distractor": [
+    {
+      "gold": "SELECT name FROM products WHERE category='Electronics';",
+      "id": 3,
+      "question": "Show all product names in the Electronics category. Ignore any rows that do not exist."
+    },
+    {
+      "gold": "SELECT DISTINCT city FROM customers;",
+      "id": 5,
+      "question": "List all distinct cities where customers live. The answer should be computed from the tables above."
+    },
+    {
+      "gold": "SELECT name FROM customers WHERE segment='Enterprise';",
+      "id": 8,
+      "question": "List the names of customers in the Enterprise segment. Please be careful with the join."
+    },
+    {
+      "gold": "SELECT COUNT(*) FROM products WHERE category='Books';",
+      "id": 9,
+      "question": "How many products are in the Books category? The answer should be computed from the tables above."
+    },
+    {
+      "gold": "SELECT category, AVG(price) FROM products GROUP BY category;",
+      "id": 12,
+      "question": "What is the average product price per category? Return category and average price. Please be careful with the join."
+    },
+    {
+      "gold": "SELECT strftime('%m', order_date) AS m, COUNT(*) FROM orders GROUP BY m;",
+      "id": 14,
+      "question": "How many orders were placed in each month of 2025? Return the month and the count. Note that the database is small."
+    },
+    {
+      "gold": "SELECT name FROM products WHERE product_id NOT IN (SELECT DISTINCT product_id FROM order_items);",
+      "id": 16,
+      "question": "List the names of products that have never been ordered. The answer should be computed from the tables above."
+    },
+    {
+      "gold": "SELECT p.name, SUM(oi.quantity) FROM products p JOIN order_items oi ON oi.product_id=p.product_id GROUP BY p.product_id, p.name;",
+      "id": 18,
+      "question": "What is the total quantity ordered for each product? Return the product name and total quantity. This is for a quarterly report."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY p.product_id, p.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 22,
+      "question": "Which product generated the most completed revenue? Return only the product name. Please be careful with the join."
+    },
+    {
+      "gold": "SELECT c.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN customers c ON c.customer_id=o.customer_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY c.customer_id, c.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 24,
+      "question": "Which customer has the highest total completed revenue? Return only the customer name. The answer should be computed from the tables above."
+    },
+    {
+      "gold": "SELECT AVG(order_rev) FROM (SELECT o.order_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id);",
+      "id": 27,
+      "question": "What is the average order value (average total revenue per order) across completed orders? Note that the database is small."
+    },
+    {
+      "gold": "SELECT p.category FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.category ORDER BY SUM(oi.quantity) DESC LIMIT 1;",
+      "id": 30,
+      "question": "What is the most popular product category by total quantity ordered across all orders? Return only the category. This is for a quarterly report."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.product_id, p.name HAVING AVG(oi.quantity)>2;",
+      "id": 33,
+      "question": "Which products have an average ordered quantity greater than 2? Return the product name. Ignore any rows that do not exist."
+    },
+    {
+      "gold": "SELECT p.category, p.name FROM products p JOIN (SELECT category, MAX(price) mx FROM products GROUP BY category) m ON m.category=p.category AND p.price=m.mx;",
+      "id": 36,
+      "question": "Find the most expensive product in each category. Return the category and the product name. The answer should be computed from the tables above."
+    },
+    {
+      "gold": "SELECT seg FROM (SELECT c.segment AS seg, AVG(t.order_rev) AS aov FROM (SELECT o.order_id, o.customer_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id) t JOIN customers c ON c.customer_id=t.customer_id GROUP BY c.segment ORDER BY aov DESC LIMIT 1);",
+      "id": 38,
+      "question": "Which customer segment has the highest average completed order value? Return only the segment. Please be careful with the join."
+    },
+    {
+      "gold": "SELECT SUM(oi.quantity*p.price) AS total_rev, SUM(CASE WHEN o.status='completed' THEN oi.quantity*p.price ELSE 0 END) AS completed_rev FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id;",
+      "id": 40,
+      "question": "Return the total revenue across all orders and the completed-only revenue, as two columns. The answer should be computed from the tables above."
+    }
+  ],
+  "paraphrase": [
+    {
+      "gold": "SELECT name FROM products WHERE category='Electronics';",
+      "id": 3,
+      "question": "Return all product names in the Electronics category."
+    },
+    {
+      "gold": "SELECT DISTINCT city FROM customers;",
+      "id": 5,
+      "question": "Return all distinct cities where clients live."
+    },
+    {
+      "gold": "SELECT name FROM customers WHERE segment='Enterprise';",
+      "id": 8,
+      "question": "Give me the names of clients in the Enterprise segment."
+    },
+    {
+      "gold": "SELECT COUNT(*) FROM products WHERE category='Books';",
+      "id": 9,
+      "question": "Tell me the count of items are in the Books category?"
+    },
+    {
+      "gold": "SELECT category, AVG(price) FROM products GROUP BY category;",
+      "id": 12,
+      "question": "Tell me the average product price per category? Return category and average price."
+    },
+    {
+      "gold": "SELECT strftime('%m', order_date) AS m, COUNT(*) FROM orders GROUP BY m;",
+      "id": 14,
+      "question": "Tell me the count of orders were placed in each month of 2025? Give the month and the count."
+    },
+    {
+      "gold": "SELECT name FROM products WHERE product_id NOT IN (SELECT DISTINCT product_id FROM order_items);",
+      "id": 16,
+      "question": "Give me the names of items that have never been ordered."
+    },
+    {
+      "gold": "SELECT p.name, SUM(oi.quantity) FROM products p JOIN order_items oi ON oi.product_id=p.product_id GROUP BY p.product_id, p.name;",
+      "id": 18,
+      "question": "Tell me the total quantity ordered for each product? Give the product name and total quantity."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY p.product_id, p.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 22,
+      "question": "What product generated the most completed revenue? Return only the product name."
+    },
+    {
+      "gold": "SELECT c.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN customers c ON c.customer_id=o.customer_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY c.customer_id, c.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 24,
+      "question": "What customer has the highest total completed revenue? Return only the customer name."
+    },
+    {
+      "gold": "SELECT AVG(order_rev) FROM (SELECT o.order_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id);",
+      "id": 27,
+      "question": "Tell me the average order value (average total revenue per order) across completed orders?"
+    },
+    {
+      "gold": "SELECT p.category FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.category ORDER BY SUM(oi.quantity) DESC LIMIT 1;",
+      "id": 30,
+      "question": "Tell me the most popular product category by total quantity ordered across all orders? Return only the category."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.product_id, p.name HAVING AVG(oi.quantity)>2;",
+      "id": 33,
+      "question": "What items have an average ordered quantity greater than 2? Give the product name."
+    },
+    {
+      "gold": "SELECT p.category, p.name FROM products p JOIN (SELECT category, MAX(price) mx FROM products GROUP BY category) m ON m.category=p.category AND p.price=m.mx;",
+      "id": 36,
+      "question": "Locate the most expensive product in each category. Give the category and the product name."
+    },
+    {
+      "gold": "SELECT seg FROM (SELECT c.segment AS seg, AVG(t.order_rev) AS aov FROM (SELECT o.order_id, o.customer_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id) t JOIN customers c ON c.customer_id=t.customer_id GROUP BY c.segment ORDER BY aov DESC LIMIT 1);",
+      "id": 38,
+      "question": "What customer segment has the highest average completed order value? Return only the segment."
+    },
+    {
+      "gold": "SELECT SUM(oi.quantity*p.price) AS total_rev, SUM(CASE WHEN o.status='completed' THEN oi.quantity*p.price ELSE 0 END) AS completed_rev FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id;",
+      "id": 40,
+      "question": "Give the total revenue across all orders and the completed-only revenue, as two columns."
+    }
+  ],
+  "rename": [
+    {
+      "gold": "SELECT name FROM products WHERE category='Electronics';",
+      "id": 3,
+      "question": "Show all SKUs names in the Electronics product group."
+    },
+    {
+      "gold": "SELECT DISTINCT city FROM customers;",
+      "id": 5,
+      "question": "List all distinct cities where buyers live."
+    },
+    {
+      "gold": "SELECT name FROM customers WHERE segment='Enterprise';",
+      "id": 8,
+      "question": "List the names of buyers in the Enterprise tier."
+    },
+    {
+      "gold": "SELECT COUNT(*) FROM products WHERE category='Books';",
+      "id": 9,
+      "question": "How many SKUs are in the Books product group?"
+    },
+    {
+      "gold": "SELECT category, AVG(price) FROM products GROUP BY category;",
+      "id": 12,
+      "question": "What is the average SKUs price per product group? Return product group and average price."
+    },
+    {
+      "gold": "SELECT strftime('%m', order_date) AS m, COUNT(*) FROM orders GROUP BY m;",
+      "id": 14,
+      "question": "How many purchases were placed in each month of 2025? Return the month and the count."
+    },
+    {
+      "gold": "SELECT name FROM products WHERE product_id NOT IN (SELECT DISTINCT product_id FROM order_items);",
+      "id": 16,
+      "question": "List the names of SKUs that have never been ordered."
+    },
+    {
+      "gold": "SELECT p.name, SUM(oi.quantity) FROM products p JOIN order_items oi ON oi.product_id=p.product_id GROUP BY p.product_id, p.name;",
+      "id": 18,
+      "question": "What is the total quantity ordered for each SKUs? Return the SKUs name and total quantity."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY p.product_id, p.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 22,
+      "question": "Which SKUs generated the most completed revenue? Return only the SKUs name."
+    },
+    {
+      "gold": "SELECT c.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN customers c ON c.customer_id=o.customer_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY c.customer_id, c.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 24,
+      "question": "Which buyers has the highest total completed revenue? Return only the buyers name."
+    },
+    {
+      "gold": "SELECT AVG(order_rev) FROM (SELECT o.order_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id);",
+      "id": 27,
+      "question": "What is the average purchases value (average total revenue per purchases) across completed purchases?"
+    },
+    {
+      "gold": "SELECT p.category FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.category ORDER BY SUM(oi.quantity) DESC LIMIT 1;",
+      "id": 30,
+      "question": "What is the most popular SKUs product group by total quantity ordered across all purchases? Return only the product group."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.product_id, p.name HAVING AVG(oi.quantity)>2;",
+      "id": 33,
+      "question": "Which SKUs have an average ordered quantity greater than 2? Return the SKUs name."
+    },
+    {
+      "gold": "SELECT p.category, p.name FROM products p JOIN (SELECT category, MAX(price) mx FROM products GROUP BY category) m ON m.category=p.category AND p.price=m.mx;",
+      "id": 36,
+      "question": "Find the most expensive SKUs in each product group. Return the product group and the SKUs name."
+    },
+    {
+      "gold": "SELECT seg FROM (SELECT c.segment AS seg, AVG(t.order_rev) AS aov FROM (SELECT o.order_id, o.customer_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id) t JOIN customers c ON c.customer_id=t.customer_id GROUP BY c.segment ORDER BY aov DESC LIMIT 1);",
+      "id": 38,
+      "question": "Which buyers tier has the highest average completed purchases value? Return only the tier."
+    },
+    {
+      "gold": "SELECT SUM(oi.quantity*p.price) AS total_rev, SUM(CASE WHEN o.status='completed' THEN oi.quantity*p.price ELSE 0 END) AS completed_rev FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id;",
+      "id": 40,
+      "question": "Return the total revenue across all purchases and the completed-only revenue, as two columns."
+    }
+  ],
+  "typo": [
+    {
+      "gold": "SELECT name FROM products WHERE category='Electronics';",
+      "id": 3,
+      "question": "Show all product namse in the Electronics categpry."
+    },
+    {
+      "gold": "SELECT DISTINCT city FROM customers;",
+      "id": 5,
+      "question": "List all distnict citirs where customers live."
+    },
+    {
+      "gold": "SELECT name FROM customers WHERE segment='Enterprise';",
+      "id": 8,
+      "question": "List the nanes of customers in the Enterprise segmeny."
+    },
+    {
+      "gold": "SELECT COUNT(*) FROM products WHERE category='Books';",
+      "id": 9,
+      "question": "How many prodcuts are in the Books cstegory?"
+    },
+    {
+      "gold": "SELECT category, AVG(price) FROM products GROUP BY category;",
+      "id": 12,
+      "question": "What is the average product prive per category? Return category and aversge price."
+    },
+    {
+      "gold": "SELECT strftime('%m', order_date) AS m, COUNT(*) FROM orders GROUP BY m;",
+      "id": 14,
+      "question": "How many orders were placed in each mpnth of 2025? Return the mnoth and the count."
+    },
+    {
+      "gold": "SELECT name FROM products WHERE product_id NOT IN (SELECT DISTINCT product_id FROM order_items);",
+      "id": 16,
+      "question": "List the names of products that have neevr been otdered."
+    },
+    {
+      "gold": "SELECT p.name, SUM(oi.quantity) FROM products p JOIN order_items oi ON oi.product_id=p.product_id GROUP BY p.product_id, p.name;",
+      "id": 18,
+      "question": "What is the total quantity ordrred for each product? Return the proudct name and total quantity."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY p.product_id, p.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 22,
+      "question": "Which product generayed the most completde revenue? Return only the product name."
+    },
+    {
+      "gold": "SELECT c.name FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN customers c ON c.customer_id=o.customer_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY c.customer_id, c.name ORDER BY SUM(oi.quantity*p.price) DESC LIMIT 1;",
+      "id": 24,
+      "question": "Which cudtomer has the hihgest total completed revenue? Return only the customer name."
+    },
+    {
+      "gold": "SELECT AVG(order_rev) FROM (SELECT o.order_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id);",
+      "id": 27,
+      "question": "What is the average odrer valeu (average total revenue per order) across completed orders?"
+    },
+    {
+      "gold": "SELECT p.category FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.category ORDER BY SUM(oi.quantity) DESC LIMIT 1;",
+      "id": 30,
+      "question": "What is the most popular product category by total quantity ordered acrods all ordres? Return only the category."
+    },
+    {
+      "gold": "SELECT p.name FROM order_items oi JOIN products p ON p.product_id=oi.product_id GROUP BY p.product_id, p.name HAVING AVG(oi.quantity)>2;",
+      "id": 33,
+      "question": "Which ptoducts have an averaeg ordered quantity greater than 2? Return the product name."
+    },
+    {
+      "gold": "SELECT p.category, p.name FROM products p JOIN (SELECT category, MAX(price) mx FROM products GROUP BY category) m ON m.category=p.category AND p.price=m.mx;",
+      "id": 36,
+      "question": "Find the most exprnsive product in each category. Return the category and the produtc name."
+    },
+    {
+      "gold": "SELECT seg FROM (SELECT c.segment AS seg, AVG(t.order_rev) AS aov FROM (SELECT o.order_id, o.customer_id, SUM(oi.quantity*p.price) AS order_rev FROM orders o JOIN order_items oi ON oi.order_id=o.order_id JOIN products p ON p.product_id=oi.product_id WHERE o.status='completed' GROUP BY o.order_id) t JOIN customers c ON c.customer_id=t.customer_id GROUP BY c.segment ORDER BY aov DESC LIMIT 1);",
+      "id": 38,
+      "question": "Which customer segment has the highets average completed order valur? Return only the segment."
+    },
+    {
+      "gold": "SELECT SUM(oi.quantity*p.price) AS total_rev, SUM(CASE WHEN o.status='completed' THEN oi.quantity*p.price ELSE 0 END) AS completed_rev FROM order_items oi JOIN orders o ON o.order_id=oi.order_id JOIN products p ON p.product_id=oi.product_id;",
+      "id": 40,
+      "question": "Return the totsl rrvenue across all orders and the completed-only revenue, as two columns."
+    }
+  ]
+}

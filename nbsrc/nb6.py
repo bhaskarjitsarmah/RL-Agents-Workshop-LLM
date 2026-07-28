@@ -99,7 +99,7 @@ optimise and the true validation accuracy we actually care about.
 """),
     code(r"""
 hacked = baked("nb6_hacked_history",
-               "python scripts/run_grpo.py --hacked-reward   (on a GPU)")
+                  "python scripts/bake_all.py --stage hacked")
 if hacked:
     from llm_utils.plotting import scissors
     scissors(hacked, proxy_key="proxy_reward", truth_key="val_accuracy",
@@ -122,7 +122,7 @@ What did the hacked policy actually learn to say?
 from llm_utils import detect_reward_hacks
 
 hacked_preds = baked("nb6_hacked_predictions",
-                     "python scripts/run_grpo.py --hacked-reward")
+                  "python scripts/bake_all.py --stage hacked")
 if hacked_preds:
     rep = detect_reward_hacks(hacked_preds)
     print(f"suspicious: {rep['suspicious']}")
@@ -206,7 +206,8 @@ Disagreement is not noise - it is a specification bug you have not written down
 yet.
 """),
     code(r"""
-hitl = baked("nb6_human_labels", "annotate 12 trajectories (see scripts/run_grpo.py)")
+hitl = baked("nb6_human_labels",
+                  "python scripts/bake_all.py --stage robustness")
 if hitl:
     tp = sum(1 for r in hitl if r["human"] and r["auto"])
     tn = sum(1 for r in hitl if not r["human"] and not r["auto"])
@@ -235,7 +236,8 @@ The perturbations are generated once, hand-checked, and frozen in
 offline.
 """),
     code(r"""
-rob = baked("nb6_robustness", "python scripts/run_robustness.py   (on a GPU)")
+rob = baked("nb6_robustness",
+                  "python scripts/bake_all.py --stage robustness")
 if rob:
     import numpy as np
     kinds = ["clean", "paraphrase", "typo", "distractor", "rename"]

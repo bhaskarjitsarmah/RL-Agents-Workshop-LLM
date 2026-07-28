@@ -150,7 +150,8 @@ if CAP["gpu"]:
     rewards = [[tr.reward for tr in g] for g in groups]
     summaries = [summarize_group(g) for g in groups]
 else:
-    d = baked("nb1_groups", "run this notebook on a Colab T4")
+    d = baked("nb1_groups",
+                  "python scripts/bake_all.py --stage groups")
     rewards = d["rewards"] if d else None
     summaries = d["summaries"] if d else None
 
@@ -217,7 +218,7 @@ if CAP["gpu"]:
         }
 else:
     sweep = (baked("nb1_temperature_sweep",
-                   "run this notebook on a Colab T4") or {})
+                  "python scripts/bake_all.py --stage groups") or {})
 
 if sweep:
     print(f"{'T':>5} {'zero-adv groups':>16} {'pass@8':>8} {'mean reward':>12}")

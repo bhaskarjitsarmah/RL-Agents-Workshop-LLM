@@ -93,6 +93,68 @@ def test_every_notebook_opens_with_badge_and_setup(mod_name, filename):
             f"(missing {expected!r})")
 
 
+def _baked_calls() -> list[tuple[str, str, str]]:
+    """(module, key, command) for every baked(...) call across the notebooks."""
+    import re
+
+    out = []
+    for mod_name, _ in NOTEBOOKS:
+        mod = importlib.import_module(f"nbsrc.{mod_name}")
+        for _kind, src in mod.CELLS:
+            for key, cmd in re.findall(
+                    r'baked\(\s*f?"([^"]+)"\s*,\s*\n?\s*"([^"]*)"', src):
+                out.append((mod_name, key, cmd))
+    return out
+
+
+def test_every_baked_key_has_a_producer():
+    """No notebook may tell a participant to run a command that does not exist.
+
+    Every `baked()` call prints its command when the artifact is missing -- which
+    is the normal state before the pre-bake run. Earlier drafts named seven
+    scripts (run_grpo.py, run_sft.py, run_deploy.py, ...) that were never
+    written, so the instruction on screen was a dead end. Worse than admitting
+    the artifact is missing.
+    """
+    import re
+
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "scripts", "bake_all.py"),
+        encoding="utf-8").read()
+    stages = set(re.findall(r'\("([a-z]+)", stage_', src))
+    assert stages, "could not parse the stage list out of bake_all.py"
+
+    problems = []
+    for mod_name, key, cmd in _baked_calls():
+        if "--stage" not in cmd:
+            problems.append(f"{mod_name}: {key!r} -> {cmd!r} (no --stage)")
+            continue
+        named = cmd.split("--stage ")[-1].strip().split()[0]
+        unknown = [s for s in named.split(",") if s not in stages]
+        if unknown:
+            problems.append(f"{mod_name}: {key!r} -> unknown stage(s) {unknown}")
+    assert not problems, "\n".join(problems)
+
+
+def test_referenced_scripts_exist():
+    """Any scripts/*.py named in a notebook or a doc must actually be there."""
+    import re
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sources = [os.path.join(root, "nbsrc", f"{m}.py") for m, _ in NOTEBOOKS]
+    sources += [os.path.join(root, d) for d in
+                ("README.md", "SETUP.md", "COLAB.md", "ARCHITECTURE.md")]
+
+    referenced: set[str] = set()
+    for path in sources:
+        if os.path.exists(path):
+            referenced |= set(re.findall(r"scripts/[a-z_]+\.py",
+                                         open(path, encoding="utf-8").read()))
+    missing = [s for s in sorted(referenced)
+               if not os.path.exists(os.path.join(root, s))]
+    assert not missing, f"referenced but absent: {missing}"
+
+
 @pytest.mark.parametrize("mod_name,filename", NOTEBOOKS)
 def test_training_notebooks_never_hard_require_a_gpu(mod_name, filename):
     """The no-GPU contract: no cell may call preflight(require_gpu=True).

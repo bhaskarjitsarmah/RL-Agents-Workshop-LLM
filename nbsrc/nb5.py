@@ -88,13 +88,14 @@ if ART_OK and CAP["gpu"]:
     art_hist = out["history"]
 else:
     art_hist = baked("nb5_art_history",
-                     "python scripts/run_art.py   (on an A10/L4 -- see the risk note)")
+                  "python scripts/bake_all.py --stage art")
 """),
     md(r"""
 ## 2. TRL vs ART, same reward, same data
 """),
     code(r"""
-trl_hist = baked("nb3_grpo_history", "python scripts/run_grpo.py")
+trl_hist = baked("nb3_grpo_history",
+                  "python scripts/bake_all.py --stage grpo")
 if art_hist and trl_hist:
     fig, ax = plt.subplots(figsize=(9, 4))
     ax.plot([h["step"] for h in trl_hist if "reward" in h],
@@ -135,7 +136,8 @@ if ART_OK and CAP["gpu"]:
     res_art = evaluate(art_openai_agent(out["model"]), split="test")
     print(report_number(res_art, "ART-trained policy"))
 else:
-    res_art = baked("nb5_art_eval", "python scripts/run_art.py")
+    res_art = baked("nb5_art_eval",
+                  "python scripts/bake_all.py --stage art")
     if res_art:
         print(report_number(tuple(res_art["test16"]), "ART-trained policy"))
 """),

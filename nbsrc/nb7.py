@@ -65,7 +65,8 @@ if CAP["gpu"] and merged:
     if not same:
         print("!! MERGE BUG. Do not serve this. Check dtype and adapter path.")
 else:
-    v = baked("nb7_merge_check", "python scripts/run_deploy.py   (on a GPU)")
+    v = baked("nb7_merge_check",
+                  "python scripts/bake_all.py --stage deploy")
     if v:
         print("adapter vs merged, per-item identical:", v["identical"])
 """),
@@ -82,7 +83,8 @@ The notebook tries them in order and reports which one came up, rather than
 assuming.
 """),
     code(r"""
-served = baked("nb7_serving", "python scripts/run_deploy.py --serve")
+served = baked("nb7_serving",
+                  "python scripts/bake_all.py --stage deploy")
 if served:
     print(f"tier that came up: {served['tier']}")
     print(f"reason: {served.get('reason', '-')}")
@@ -107,7 +109,8 @@ if served and served.get("base_url") and CAP["gpu"]:
     res_served = evaluate(make_local_agent(lm_served), split="test")
     print(report_number(res_served, "served endpoint"))
 else:
-    v = baked("nb7_served_eval", "python scripts/run_deploy.py --serve")
+    v = baked("nb7_served_eval",
+                  "python scripts/bake_all.py --stage deploy")
     if v:
         print(report_number(tuple(v["test16"]), "served endpoint"))
         print("in-process vs served, identical:", v.get("matches_in_process"))
@@ -116,7 +119,8 @@ else:
 ## 3. Latency and throughput
 """),
     code(r"""
-lat = baked("nb7_latency", "python scripts/run_deploy.py --bench")
+lat = baked("nb7_latency",
+                  "python scripts/bake_all.py --stage deploy")
 if lat:
     fig, ax = plt.subplots(1, 2, figsize=(12, 3.8))
     for name, xs in lat["latency_ms"].items():
@@ -163,7 +167,8 @@ if lat:
     print("This is the slide that decides the project, and it is one division.")
 """),
     code(r"""
-pareto_pts = baked("nb7_pareto", "python scripts/run_deploy.py --bench")
+pareto_pts = baked("nb7_pareto",
+                  "python scripts/bake_all.py --stage deploy")
 if pareto_pts:
     from llm_utils.plotting import pareto
     pareto(pareto_pts, title="Accuracy vs cost per 1k queries", prebaked=PREBAKED)

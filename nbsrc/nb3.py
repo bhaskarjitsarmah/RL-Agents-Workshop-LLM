@@ -182,7 +182,8 @@ if CAP["gpu"]:
     vram_budget("after train")
     grpo_hist = trainer.state.log_history
 else:
-    grpo_hist = baked("nb3_grpo_history", "python scripts/run_grpo.py   (on a GPU)")
+    grpo_hist = baked("nb3_grpo_history",
+                  "python scripts/bake_all.py --stage grpo")
 """),
     md(r"""
 ## The GRPO dashboard
@@ -217,7 +218,8 @@ accuracy is what you wanted. When they part company, believe the val number.
 All pre-baked, because each is a full training run. Discuss them live.
 """),
     code(r"""
-abl = baked("nb3_ablations", "python scripts/run_grpo.py --ablations   (on a GPU)")
+abl = baked("nb3_ablations",
+                  "python scripts/bake_all.py --stage ablations")
 if abl:
     from llm_utils.plotting import learning_curve
     fig, axes = plt.subplots(1, 3, figsize=(15, 3.8))
@@ -252,7 +254,7 @@ recognising the shape is most of the fix.
 """),
     code(r"""
 paths = {k: baked(f"pathologies/{k}",
-                  "python scripts/run_grpo.py --pathologies   (on a GPU)")
+                  "python scripts/bake_all.py --stage pathologies")
          for k in ("reward_collapse", "kl_blowup", "length_collapse", "zero_advantage")}
 paths = {k: v for k, v in paths.items() if v}
 
@@ -290,7 +292,8 @@ straight from repo 1's validation gate:
 ## Where we got to
 """),
     code(r"""
-res = baked("nb3_results", "python scripts/run_grpo.py   (on a GPU)")
+res = baked("nb3_results",
+                  "python scripts/bake_all.py --stage grpo")
 if res:
     from llm_utils.plotting import bar_accuracy
     bar_accuracy({k: tuple(v) for k, v in res["test16"].items()},

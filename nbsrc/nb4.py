@@ -129,9 +129,11 @@ mt_hist = None
 if CAP["gpu"]:
     print("Live multi-turn training is ~3x the generation cost per step.")
     print("The notebook runs 15 steps as a demonstration; the pre-baked run is 100.")
-    mt_hist = baked("nb4_multiturn", "python scripts/run_grpo.py --multi-turn")
+    mt_hist = baked("nb4_multiturn",
+                  "python scripts/bake_all.py --stage multiturn")
 else:
-    mt_hist = baked("nb4_multiturn", "python scripts/run_grpo.py --multi-turn  (on a GPU)")
+    mt_hist = baked("nb4_multiturn",
+                  "python scripts/bake_all.py --stage multiturn")
 
 if mt_hist:
     from llm_utils.plotting import learning_curve
@@ -172,7 +174,8 @@ for the wrong thing.
 Hold that thought - NB6 is this same lesson with the safety rails off.
 """),
     code(r"""
-sweep = baked("nb4_penalty_sweep", "python scripts/run_grpo.py --penalty-sweep")
+sweep = baked("nb4_penalty_sweep",
+                  "python scripts/bake_all.py --stage multiturn")
 if sweep:
     fig, ax = plt.subplots(1, 2, figsize=(11, 3.8))
     pens = list(sweep)
@@ -184,7 +187,8 @@ if sweep:
     plt.tight_layout(); plt.show()
 """),
     code(r"""
-budget = baked("nb4_turn_budget", "python scripts/run_grpo.py --turn-budget")
+budget = baked("nb4_turn_budget",
+                  "python scripts/bake_all.py --stage multiturn")
 if budget:
     from llm_utils.plotting import bar_accuracy
     bar_accuracy({f"max_turns={k}": tuple(v) for k, v in budget.items()},

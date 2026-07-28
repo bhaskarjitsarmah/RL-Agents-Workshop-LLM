@@ -49,21 +49,19 @@ STAGES = {
     "grpo":       "nb3_grpo_history, nb3_results + the grpo adapter (2-4 h)",
     "ablations":  "nb3_ablations -- beta / G / scale_rewards (3 runs)",
     "pathologies":"pathologies/* -- four deliberately broken runs",
-    "art":        "nb5_art_history, nb5_art_eval (45-90 min; needs vLLM)",
+    "multiturn":  "nb4_penalty_sweep, nb4_turn_budget -- tool-use behaviour",
     "hacked":     "nb6_hacked_* -- the scissors-chart run (18-30 min)",
-    "headtohead": "nb8_* -- six agents on test-16",
+    "robustness": "nb6_robustness -- needs data/test_perturbed.json",
+    "art":        "nb5_art_history, nb5_art_eval (45-90 min; needs vLLM)",
+    "deploy":     "nb7_merge_check, nb7_latency, nb7_pareto -- merge + bench",
+    "headtohead": "nb8_headtohead -- six agents on test-16",
+    "bigsets":    "nb8_bigsets, nb8_seeds -- val/test_ext + seed spread",
 }
 
-#: Artifacts the notebooks replay that this script does not yet produce.
-#: Listed rather than omitted: the corresponding notebook cells will stay in
-#: replay mode and print the command, so a silently missing stage would look
-#: like a broken notebook instead of unfinished bakery.
-NOT_YET_IMPLEMENTED = {
-    "multiturn":  "nb4_multiturn, nb4_penalty_sweep, nb4_turn_budget",
-    "robustness": "nb6_robustness (needs data/test_perturbed.json first)",
-    "deploy":     "nb7_merge_check, nb7_serving, nb7_latency, nb7_pareto",
-    "bigsets":    "nb8_bigsets, nb8_seeds, nb8_pareto",
-}
+#: Every `baked()` key in the notebooks must be produced by one of the stages
+#: above. `tests/test_notebooks.py::test_every_baked_key_has_a_producer`
+#: enforces it -- otherwise a notebook tells a participant to run a command that
+#: does nothing, which is worse than admitting the artifact is missing.
 
 
 def log(msg: str) -> None:
@@ -377,12 +375,177 @@ def stage_headtohead(force: bool) -> None:
         log(f"  {k}: {v['accuracy']:.3f}")
 
 
+def stage_multiturn(force: bool) -> None:
+    """NB4: the multi-turn run, the penalty sweep, and the turn-budget curve."""
+    from llm_utils import batch_rollout, learnable_band, rollout_multi_turn
+    from llm_utils.local_llm import LocalLM
+    from llm_utils.metrics import trajectory_efficiency
+
+    lm = LocalLM(base_model_4bit(), adapter=adapter_repo("grpo"))
+    policy = lm.as_policy()
+    val = read_jsonl(os.path.join(DATA, "tasks_val_gen.jsonl"))[:80]
+
+    if not skip("nb4_penalty_sweep", force):
+        sweep = {}
+        for pen in (0.0, 0.05, 0.30):
+            w = {"efficiency": pen}
+            trajs = [rollout_multi_turn(policy, t, max_turns=4, temperature=0.0,
+                                        weights=w) for t in val]
+            eff = trajectory_efficiency(trajs)
+            sweep[str(pen)] = {"mean_turns": eff["mean_llm_calls"],
+                               "mean_tool_calls": eff["mean_tool_calls"],
+                               "accuracy": eff["accuracy"]}
+            log(f"  penalty={pen}: turns {eff['mean_llm_calls']:.2f}  "
+                f"acc {eff['accuracy']:.3f}")
+        save_result("nb4_penalty_sweep", sweep)
+
+    if not skip("nb4_turn_budget", force):
+        budget = {}
+        for mt in (1, 2, 3, 4):
+            trajs = [rollout_multi_turn(policy, t, max_turns=mt, temperature=0.0)
+                     for t in val]
+            k = sum(1 for tr in trajs if tr.correct)
+            budget[str(mt)] = [k, len(trajs)]
+            log(f"  max_turns={mt}: {k}/{len(trajs)}")
+        save_result("nb4_turn_budget", budget)
+    lm.unload()
+
+
+def stage_robustness(force: bool) -> None:
+    """NB6: perturbation suite across every checkpoint, plus the HITL sample."""
+    from llm_utils.local_llm import LocalLM, make_local_agent
+    from llm_utils.metrics import robustness_suite
+
+    perturbed = os.path.join(DATA, "test_perturbed.json")
+    if not os.path.exists(perturbed):
+        log("  data/test_perturbed.json missing -- run "
+            "python scripts/make_perturbations.py first")
+        return
+    if skip("nb6_robustness", force):
+        return
+    out = {}
+    for label, adapter in (("base", None),
+                           ("star-sft", adapter_repo("star-sft")),
+                           ("grpo", adapter_repo("grpo")),
+                           ("hacked", "out/hacked")):
+        try:
+            lm = LocalLM(base_model_4bit(), adapter=adapter)
+        except Exception as e:  # noqa: BLE001 - a missing adapter is not fatal
+            log(f"  {label}: unavailable ({e})")
+            continue
+        out[label] = robustness_suite(make_local_agent(lm), perturbed)
+        log(f"  {label}: {out[label]}")
+        lm.unload()
+    save_result("nb6_robustness", out)
+
+
+def stage_deploy(force: bool) -> None:
+    """NB7: merge check, serving tier, latency, and the cost Pareto."""
+    import time as _t
+
+    from llm_utils import evaluate
+    from llm_utils.llm import GPU_HOURLY_USD, PRICING_PER_1M
+    from llm_utils.local_llm import LocalLM, make_local_agent
+    from llm_utils.trainers import merge_and_save
+
+    if not skip("nb7_merge_check", force):
+        merged = merge_and_save(adapter_repo("grpo"), "out/merged-fp16")
+        a = evaluate(make_local_agent(
+            LocalLM(base_model_4bit(), adapter=adapter_repo("grpo"))), split="test")
+        b = evaluate(make_local_agent(
+            LocalLM(model_id=merged, load_in_4bit=False)), split="test")
+        key = lambda r: sorted(r["records"], key=lambda x: x["id"])  # noqa: E731
+        identical = [x["correct"] for x in key(a)] == [x["correct"] for x in key(b)]
+        save_result("nb7_merge_check", {
+            "identical": identical,
+            "adapter": [sum(x["correct"] for x in a["records"]), a["n"]],
+            "merged": [sum(x["correct"] for x in b["records"]), b["n"]],
+        })
+        log(f"  merge per-item identical: {identical}")
+        if not identical:
+            log("  !! MERGE BUG -- do not serve this. Check dtype and adapter path.")
+
+    if not skip("nb7_latency", force):
+        lm = LocalLM(base_model_4bit(), adapter=adapter_repo("grpo"))
+        val = read_jsonl(os.path.join(DATA, "tasks_val_gen.jsonl"))[:40]
+        agent = make_local_agent(lm)
+        lats = []
+        for t in val:
+            t0 = _t.time()
+            agent(t["question"])
+            lats.append((_t.time() - t0) * 1000)
+        throughput = {}
+        for bs in (1, 8, 32):
+            msgs = [[{"role": "user", "content": t["question"]}] for t in val[:bs]]
+            t0 = _t.time()
+            lm.generate_batch(msgs, n=1, max_new_tokens=128)
+            throughput[str(bs)] = bs / max(_t.time() - t0, 1e-6)
+            log(f"  batch {bs}: {throughput[str(bs)]:.2f} q/s")
+        st = lm.stats
+        save_result("nb7_latency", {
+            "latency_ms": {"self-hosted T4": lats},
+            "throughput": throughput,
+            "mean_prompt_tokens": st["prompt_tokens"] // max(st["calls"], 1),
+            "mean_completion_tokens": st["completion_tokens"] // max(st["calls"], 1),
+        })
+
+        qps = max(throughput.values())
+        p = PRICING_PER_1M["gpt-4o-mini"]
+        api_1k = (st["prompt_tokens"] // max(st["calls"], 1) * p["in"]
+                  + st["completion_tokens"] // max(st["calls"], 1) * p["out"]) / 1e6 * 1000
+        self_1k = GPU_HOURLY_USD["T4"] / (qps * 3600) * 1000
+        h2h = load_result("nb8_headtohead") or {}
+        pts = []
+        for label, cost in (("gpt-4o-mini", api_1k), ("Qwen GRPO (T4)", self_1k)):
+            r = h2h.get("A gpt-4o-mini" if "gpt" in label else "E Qwen SFT+GRPO")
+            if r:
+                pts.append({"label": label, "cost_per_1k": round(cost, 4),
+                            "accuracy": r["accuracy"]})
+        save_result("nb7_pareto", pts)
+        lm.unload()
+
+
+def stage_bigsets(force: bool) -> None:
+    """NB8: the high-power eval sets and the seed replicates."""
+    from llm_utils.evaluate_batch import (evaluate_jsonl, evaluate_seeds,
+                                          make_batch_agent)
+    from llm_utils.local_llm import LocalLM, make_local_agent
+
+    if not skip("nb8_bigsets", force):
+        out: dict = {"val": {}, "test_ext": {}}
+        for label, adapter in (("C Qwen zero-shot", None),
+                               ("D Qwen SFT", adapter_repo("star-sft")),
+                               ("E Qwen SFT+GRPO", adapter_repo("grpo"))):
+            lm = LocalLM(base_model_4bit(), adapter=adapter)
+            ba = make_batch_agent(lm)
+            for split, fn in (("val", "tasks_val_gen.jsonl"),
+                              ("test_ext", "tasks_test_ext_gen.jsonl")):
+                r = evaluate_jsonl(ba, os.path.join(DATA, fn))
+                out[split][label] = [sum(x["correct"] for x in r["records"]), r["n"]]
+                log(f"  {label} {split}: {out[split][label]}")
+            lm.unload()
+        save_result("nb8_bigsets", out)
+
+    if not skip("nb8_seeds", force):
+        # Decoding-seed spread on the SAME checkpoint. If this is comparable to
+        # the effect being claimed, the effect is decoding luck.
+        lm = LocalLM(base_model_4bit(), adapter=adapter_repo("grpo"))
+        res = evaluate_seeds(lambda s: make_local_agent(lm), split="test",
+                             seeds=(0, 1, 2, 3, 4), temperature=0.7)
+        save_result("nb8_seeds", {"decoding": {"E Qwen SFT+GRPO": res["accuracies"]},
+                                  "training": {}})
+        log(f"  decoding-seed spread: {res['mean']:.3f} +- {res['std']:.3f}")
+        lm.unload()
+
+
 ORDER = [
     ("baselines", stage_baselines), ("groups", stage_groups),
     ("star", stage_star), ("sft", stage_sft), ("grpo", stage_grpo),
     ("ablations", stage_ablations), ("pathologies", stage_pathologies),
-    ("hacked", stage_hacked), ("art", stage_art),
-    ("headtohead", stage_headtohead),
+    ("multiturn", stage_multiturn), ("hacked", stage_hacked),
+    ("robustness", stage_robustness), ("art", stage_art),
+    ("deploy", stage_deploy), ("headtohead", stage_headtohead),
+    ("bigsets", stage_bigsets),
 ]
 
 
@@ -395,14 +558,8 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.list:
-        print("implemented:")
-        for k, v in STAGES.items():
-            print(f"  {k:<12} {v}")
-        print()
-        print("not yet implemented (the notebook stays in replay mode and "
-              "prints the command it needs):")
-        for k, v in NOT_YET_IMPLEMENTED.items():
-            print(f"  {k:<12} {v}")
+        for k, _fn in ORDER:
+            print(f"  {k:<12} {STAGES.get(k, '')}")
         return 0
 
     cap = capability()

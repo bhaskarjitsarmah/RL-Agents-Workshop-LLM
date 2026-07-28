@@ -200,7 +200,8 @@ else:
     import os
     records = read_records(star_path()) if os.path.exists(star_path()) else []
     if not records:
-        baked("star_sft", "python scripts/run_star_sampling.py   (on a GPU)")
+        baked("star_sft",
+                  "python scripts/bake_all.py --stage star")
 
 if records:
     print(f"\nfull STaR set: {len(records)} pairs, "
@@ -252,8 +253,8 @@ if CAP["gpu"] and records:
     vram_budget("after train")
     sft_hist = trainer.state.log_history
 else:
-    sft_hist = baked("nb2_sft", "python scripts/run_star_sampling.py && "
-                                "python scripts/run_sft.py   (on a GPU)")
+    sft_hist = baked("nb2_sft",
+                     "python scripts/bake_all.py --stage star,sft")
 """),
     code(r"""
 from llm_utils.plotting import learning_curve
@@ -275,7 +276,8 @@ entirely) and compare on test-16 and test_ext. This is the question every
 audience asks about a generated training set; we answer it before it is asked.
 """),
     code(r"""
-abl = baked("nb2_ablations", "python scripts/run_sft.py --ablations   (on a GPU)")
+abl = baked("nb2_ablations",
+                  "python scripts/bake_all.py --stage sft")
 if abl:
     from llm_utils.plotting import bar_accuracy
     bar_accuracy({k: tuple(v) for k, v in abl["test16"].items()},
