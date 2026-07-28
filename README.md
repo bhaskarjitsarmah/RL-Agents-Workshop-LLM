@@ -114,7 +114,7 @@ cd RL-Agents-Workshop-LLM
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt                       # local / CPU
 cp .env.example .env                                  # only WANDB_API_KEY is required
-pytest tests/ -q                                      # 84 tests, ~80s
+pytest tests/ -q                                      # 130 tests, ~100s
 ```
 
 On Colab each notebook's first cell clones and installs
@@ -194,7 +194,7 @@ llm_utils/
 data/       generated tasks, leakage audit, pre-baked results
 nbsrc/      notebook cell definitions      notebooks/  generated .ipynb
 scripts/    generate_tasks, review_sample, check_api_surface, run_*
-tests/      84 tests: parity, generator, rewards, MDP, statistics
+tests/      130 tests: parity, generator, rewards, MDP, statistics, notebooks
 ```
 
 ## Cost
