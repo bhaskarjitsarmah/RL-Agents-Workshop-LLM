@@ -27,7 +27,7 @@ cd RL-Agents-Workshop-LLM
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env                                  # Windows: copy .env.example .env
-pytest tests/ -q                                      # 130 tests, ~100s
+pytest tests/ -q                                      # 132 tests, ~110s
 ```
 
 If those tests pass, your environment is correct. They check the vendored files
