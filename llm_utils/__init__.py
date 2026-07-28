@@ -46,6 +46,24 @@ from .evaluate import evaluate
 from .agents import (
     baseline_prompt, extract_sql, make_agent, make_baseline_agent, repair_prompt,
 )
+from .sqlio import (
+    exec_info, fast_score_sql, is_read_only, is_write_statement, safe_run_sql,
+)
+from .gen_tasks import (
+    TEST_FAMILIES, generate_tasks, load_generated, read_jsonl, split_report,
+)
+from .rewards import (
+    composite_reward, detect_reward_hacks, make_hackable_reward_fns,
+    make_trl_reward_fns, r_hackable_rowcount, reward_bounds,
+)
+from .rollout import (
+    SQLEnv, Trajectory, advantages, batch_rollout, learnable_band, rollout_group,
+    rollout_multi_turn, rollout_single_turn, summarize_group,
+)
+from .metrics import (
+    compare, error_taxonomy, mcnemar, paired_bootstrap, pass_at_k, report_number,
+    seed_summary, trajectory_efficiency, wilson_ci, zero_advantage_fraction,
+)
 
 __all__ = [
     # repo-1 surface (unchanged)
@@ -59,4 +77,21 @@ __all__ = [
     "base_model", "base_model_4bit", "adapter_repo", "BASE_MODELS",
     "MODEL_SIZE", "HF_NAMESPACE", "PRICING_PER_1M", "LANGFUSE_AVAILABLE",
     "reset_client",
+    # safe/fast SQL layer
+    "safe_run_sql", "fast_score_sql", "exec_info", "is_read_only",
+    "is_write_statement",
+    # generated tasks
+    "generate_tasks", "load_generated", "read_jsonl", "split_report",
+    "TEST_FAMILIES",
+    # reward
+    "composite_reward", "reward_bounds", "make_trl_reward_fns",
+    "make_hackable_reward_fns", "r_hackable_rowcount", "detect_reward_hacks",
+    # MDP
+    "SQLEnv", "Trajectory", "rollout_single_turn", "rollout_multi_turn",
+    "rollout_group", "batch_rollout", "advantages", "summarize_group",
+    "learnable_band",
+    # honest statistics
+    "report_number", "wilson_ci", "paired_bootstrap", "mcnemar", "compare",
+    "seed_summary", "pass_at_k", "zero_advantage_fraction",
+    "trajectory_efficiency", "error_taxonomy",
 ]

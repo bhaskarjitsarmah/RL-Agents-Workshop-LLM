@@ -65,6 +65,27 @@ def safe_run_sql(query: str, path: str = DB_PATH, timeout: float = 5.0):
                 pass
 
 
+_WRITE_VERBS = ("insert", "update", "delete", "drop", "alter", "create",
+                "replace", "attach", "detach", "vacuum", "reindex", "truncate")
+
+
+def is_write_statement(query: str) -> bool:
+    """True only for a statement that actually tries to MODIFY the database.
+
+    Distinct from `not is_read_only(...)`, which is also true for gibberish.
+    That distinction matters for the reward: a malformed query is a mistake and
+    should still earn its formatting credit (that gradient is what teaches a
+    small model to emit a ```sql block at all), whereas `DROP TABLE customers`
+    is a different kind of event and gets clamped to zero.
+    """
+    q = query.strip().lstrip("(").lower()
+    if any(q.startswith(v) for v in _WRITE_VERBS):
+        return True
+    # Stacked statement smuggling a write after a legitimate SELECT.
+    parts = [p.strip().lower() for p in query.split(";") if p.strip()]
+    return any(p.startswith(v) for p in parts[1:] for v in _WRITE_VERBS)
+
+
 def is_read_only(query: str) -> bool:
     """True if `query` is a bare SELECT (or a WITH ... SELECT).
 
