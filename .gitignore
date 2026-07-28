@@ -1,0 +1,48 @@
+# --- Secrets: NEVER commit real keys ---
+.env
+.env.local
+*.key
+
+# --- Generated artifacts (rebuilt deterministically) ---
+# shop.db is rebuilt by build_db(seed=42); its CONTENT hash is asserted in tests.
+data/*.db
+
+# NOTE: unlike repo 1, data/*.json is NOT ignored. The generated task sets, the
+# leakage audit, and data/results/*.json are CHECKED IN on purpose -- they are
+# what let every notebook render every chart with no GPU and no network.
+
+# --- Model artifacts: HF Hub is the source of truth ---
+adapters/
+merged/
+*.safetensors
+*.gguf
+checkpoints/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# --- Experiment tracking (curves are exported to data/results/ instead) ---
+wandb/
+*/wandb/
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

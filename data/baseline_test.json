@@ -1,0 +1,8 @@
+{
+  "accuracy": 0.75,
+  "by_level": {
+    "easy": 1.0,
+    "medium": 0.5,
+    "hard": 0.75
+  }
+}

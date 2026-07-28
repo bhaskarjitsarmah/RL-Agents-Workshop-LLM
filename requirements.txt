@@ -1,0 +1,30 @@
+# LOCAL / CPU requirements -- eval, data generation, analysis, and offline replay.
+#
+# Training is Colab-only. This file deliberately does NOT install unsloth,
+# bitsandbytes, or vllm: bitsandbytes on Windows is unreliable, and a broken
+# local install is a worse outcome than a clearly-absent one. See
+# requirements-colab.txt for the GPU training stack, and README.md for why.
+#
+# Everything below is enough to: run the vendored evaluate() against an
+# OpenAI-compatible endpoint, generate and audit the task set, compute rewards,
+# replay every pre-baked training run, and render every chart.
+
+# Core
+openai>=1.30
+python-dotenv>=1.0
+matplotlib>=3.7
+numpy>=1.24
+nbformat>=5.9
+
+# Experiment tracking (offline mode works with no key: WANDB_MODE=offline)
+wandb>=0.18
+
+# Optional observability -- llm.py degrades gracefully if this is absent.
+langfuse>=4.0
+
+# Notebook runtime
+ipykernel>=6.29
+jupyterlab>=4.0
+
+# Tests
+pytest>=8.0

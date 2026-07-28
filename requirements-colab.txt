@@ -1,0 +1,47 @@
+# COLAB / GPU training stack.
+#
+# Read this before changing a pin: unpinned installs are the single most common
+# cause of a dead workshop. Colab's preinstalled torch moves without warning,
+# Unsloth replaces torch during install (forcing a runtime restart), and TRL's
+# GRPOConfig field names have churned repeatedly across minor versions.
+#
+# Target hardware: Google Colab free T4 -- Turing (sm_75), 16GB, fp16 ONLY.
+#   * no bfloat16          -> every config uses fp16=True, bf16=False
+#   * no FlashAttention-2  -> attn_implementation="sdpa"
+#   * vLLM is unreliable   -> use_vllm=False / fast_inference=False by default
+#
+# VERIFY BEFORE THE WORKSHOP (see scripts/check_api_surface.py):
+#   python scripts/check_api_surface.py
+# It prints the actual dataclass fields of SFTConfig/GRPOConfig for the resolved
+# versions. Correct trainers.py against THAT, not against documentation.
+
+# --- Everything from the local/CPU set ---
+-r requirements.txt
+
+# --- Core training stack (pin exactly; bump deliberately) ---
+torch==2.5.1
+transformers==4.46.3
+trl==0.12.2
+peft==0.13.2
+accelerate==1.1.1
+datasets==3.1.0
+bitsandbytes==0.44.1
+
+# --- 4-bit LoRA fast path. Installing this replaces torch -> restart runtime. ---
+# Unsloth supports CUDA capability >= 7.0, so a T4 (7.5) trains fine. Its
+# vLLM-backed `fast_inference=True` path does NOT reliably work on Turing --
+# trainers.py defaults it off and falls back to plain HF `generate`.
+unsloth==2024.12.4
+unsloth_zoo==2024.12.4
+
+# --- Serving (NB7). vLLM on Turing is best-effort: NB7 tries it, measures it if
+#     it loads, and falls back to FastAPI+transformers, then llama.cpp on CPU. ---
+# vllm==0.6.4.post1
+fastapi>=0.115
+uvicorn>=0.32
+
+# --- OpenPipe ART (NB5). See the risk note in README: if LocalBackend will not
+#     initialize on a free T4, NB5 replays a pre-baked run and ships the exact
+#     code to run elsewhere. Installed last so a failure here cannot break the
+#     rest of the day. ---
+openpipe-art>=0.4.0
