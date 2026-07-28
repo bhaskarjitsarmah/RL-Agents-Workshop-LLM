@@ -1,0 +1,281 @@
+{
+  "capacity_by_family": {
+    "active_multi_month": 18,
+    "agg_price_by_category": 24,
+    "argmax_qty_category": 3,
+    "argmax_qty_group_status": 32,
+    "argmax_revenue_by_group": 96,
+    "attr_of_customer": 360,
+    "avg_order_value": 24,
+    "avg_qty_having": 12,
+    "avg_qty_per_order_item": 3,
+    "count_by_group": 20,
+    "count_cust_by_city": 21,
+    "count_orders_by_status": 12,
+    "count_orders_in_month": 72,
+    "count_prod_by_category": 30,
+    "cust_by_city": 42,
+    "cust_by_segment": 18,
+    "customers_by_city_segment": 126,
+    "customers_with_status_order": 12,
+    "distinct_col": 24,
+    "distinct_products_in_status": 12,
+    "extreme_per_group": 4,
+    "having_count": 18,
+    "max_per_group": 3,
+    "never_in_status": 24,
+    "never_ordered_customers": 6,
+    "never_ordered_in_category": 20,
+    "never_ordered_products": 3,
+    "order_ids_by_status": 12,
+    "orders_count_by_status_month": 288,
+    "orders_per_customer": 3,
+    "orders_per_month": 3,
+    "orders_per_month_status": 16,
+    "orders_with_n_items": 54,
+    "price_of_product": 90,
+    "prod_by_category": 30,
+    "prod_in_cat_above_price": 210,
+    "prod_price_compare": 126,
+    "qty_per_product": 3,
+    "qty_per_product_status": 16,
+    "revenue_by_group": 120,
+    "revenue_by_group_all": 20,
+    "revenue_per_month": 24,
+    "revenue_total_status": 28,
+    "segment_avg_order_value": 24,
+    "signup_after": 228,
+    "status_fraction": 48,
+    "topn_customers_by_orders": 36,
+    "topn_products_by_price": 18,
+    "total_vs_status_revenue": 24
+  },
+  "excluded_families": [],
+  "level_mix_achieved": {
+    "test_ext": {
+      "easy": 0.284,
+      "hard": 0.402,
+      "medium": 0.314
+    },
+    "train": {
+      "easy": 0.309,
+      "hard": 0.474,
+      "medium": 0.217
+    },
+    "val": {
+      "easy": 0.31,
+      "hard": 0.475,
+      "medium": 0.215
+    }
+  },
+  "level_mix_requested": {
+    "easy": 0.25,
+    "hard": 0.35,
+    "medium": 0.4
+  },
+  "n_families": 49,
+  "n_templates": 49,
+  "near_variant_of": {
+    "argmax_qty_group_status": "argmax_qty_category",
+    "extreme_per_group": "max_per_group",
+    "never_ordered_in_category": "never_ordered_products",
+    "orders_per_month_status": "orders_per_month",
+    "qty_per_product_status": "qty_per_product"
+  },
+  "noleak_train": 800,
+  "note_slot_free": "These families have zero usable instances BY CONSTRUCTION: they are slot-free, so their only possible gold is the held-out test task itself. The leakage rules correctly reject every candidate. test_ext covers those five patterns via the near-variant families instead.",
+  "produced": {
+    "test_ext": 169,
+    "train": 800,
+    "val": 200
+  },
+  "rejected_by_family": {
+    "agg_price_by_category": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "argmax_qty_category": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 2
+    },
+    "argmax_qty_group_status": {
+      "rule2_near_duplicate_question": 4,
+      "rule4_result_and_question": 1
+    },
+    "argmax_revenue_by_group": {
+      "rule1_exact_question": 1,
+      "rule4_result_and_question": 7
+    },
+    "avg_order_value": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "avg_qty_having": {
+      "rule1_exact_question": 1,
+      "rule2_near_duplicate_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "count_prod_by_category": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "cust_by_segment": {
+      "rule1_exact_question": 1,
+      "rule2_near_duplicate_question": 1,
+      "rule3_canonical_sql": 4
+    },
+    "customers_by_city_segment": {
+      "empty_result": 36
+    },
+    "distinct_col": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "having_count": {
+      "empty_result": 3
+    },
+    "max_per_group": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 2
+    },
+    "never_in_status": {
+      "rule4_result_and_question": 3
+    },
+    "never_ordered_in_category": {
+      "empty_result": 16,
+      "rule4_result_and_question": 1
+    },
+    "never_ordered_products": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 2
+    },
+    "orders_per_month": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 2
+    },
+    "prod_by_category": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    },
+    "prod_in_cat_above_price": {
+      "empty_result": 66,
+      "rule4_result_and_question": 3
+    },
+    "qty_per_product": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 2
+    },
+    "segment_avg_order_value": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5,
+      "rule4_result_and_question": 1
+    },
+    "signup_after": {
+      "empty_result": 6
+    },
+    "total_vs_status_revenue": {
+      "rule1_exact_question": 1,
+      "rule3_canonical_sql": 5
+    }
+  },
+  "rejected_by_rule": {
+    "empty_result": 127,
+    "rule1_exact_question": 15,
+    "rule2_near_duplicate_question": 6,
+    "rule3_canonical_sql": 54,
+    "rule4_result_and_question": 16
+  },
+  "rejected_total": 218,
+  "requested": {
+    "test_ext": 169,
+    "train": 800,
+    "val": 200
+  },
+  "shortfall": {
+    "test_ext": 0,
+    "train": 0,
+    "val": 0
+  },
+  "signature_only_collisions_allowed": 215,
+  "slot_free_test_families": [
+    "argmax_qty_category",
+    "max_per_group",
+    "never_ordered_products",
+    "orders_per_month",
+    "qty_per_product"
+  ],
+  "test_families": [
+    "agg_price_by_category",
+    "argmax_qty_category",
+    "argmax_qty_group_status",
+    "argmax_revenue_by_group",
+    "avg_order_value",
+    "avg_qty_having",
+    "count_prod_by_category",
+    "cust_by_segment",
+    "distinct_col",
+    "extreme_per_group",
+    "max_per_group",
+    "never_ordered_in_category",
+    "never_ordered_products",
+    "orders_per_month",
+    "orders_per_month_status",
+    "prod_by_category",
+    "qty_per_product",
+    "qty_per_product_status",
+    "segment_avg_order_value",
+    "total_vs_status_revenue"
+  ],
+  "usable_by_family": {
+    "active_multi_month": 18,
+    "agg_price_by_category": 18,
+    "argmax_qty_category": 0,
+    "argmax_qty_group_status": 27,
+    "argmax_revenue_by_group": 88,
+    "attr_of_customer": 360,
+    "avg_order_value": 18,
+    "avg_qty_having": 5,
+    "avg_qty_per_order_item": 3,
+    "count_by_group": 20,
+    "count_cust_by_city": 21,
+    "count_orders_by_status": 12,
+    "count_orders_in_month": 72,
+    "count_prod_by_category": 24,
+    "cust_by_city": 42,
+    "cust_by_segment": 12,
+    "customers_by_city_segment": 90,
+    "customers_with_status_order": 12,
+    "distinct_col": 18,
+    "distinct_products_in_status": 12,
+    "extreme_per_group": 4,
+    "having_count": 15,
+    "max_per_group": 0,
+    "never_in_status": 21,
+    "never_ordered_customers": 6,
+    "never_ordered_in_category": 3,
+    "never_ordered_products": 0,
+    "order_ids_by_status": 12,
+    "orders_count_by_status_month": 288,
+    "orders_per_customer": 3,
+    "orders_per_month": 0,
+    "orders_per_month_status": 16,
+    "orders_with_n_items": 54,
+    "price_of_product": 90,
+    "prod_by_category": 24,
+    "prod_in_cat_above_price": 141,
+    "prod_price_compare": 126,
+    "qty_per_product": 0,
+    "qty_per_product_status": 16,
+    "revenue_by_group": 120,
+    "revenue_by_group_all": 20,
+    "revenue_per_month": 24,
+    "revenue_total_status": 28,
+    "segment_avg_order_value": 17,
+    "signup_after": 222,
+    "status_fraction": 48,
+    "topn_customers_by_orders": 36,
+    "topn_products_by_price": 18,
+    "total_vs_status_revenue": 18
+  },
+  "usable_total": 2242
+}

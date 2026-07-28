@@ -1,0 +1,49 @@
+{
+  "near_variant_of": {
+    "argmax_qty_group_status": "argmax_qty_category",
+    "extreme_per_group": "max_per_group",
+    "never_ordered_in_category": "never_ordered_products",
+    "orders_per_month_status": "orders_per_month",
+    "qty_per_product_status": "qty_per_product"
+  },
+  "test_families": [
+    "agg_price_by_category",
+    "argmax_qty_category",
+    "argmax_qty_group_status",
+    "argmax_revenue_by_group",
+    "avg_order_value",
+    "avg_qty_having",
+    "count_prod_by_category",
+    "cust_by_segment",
+    "distinct_col",
+    "extreme_per_group",
+    "max_per_group",
+    "never_ordered_in_category",
+    "never_ordered_products",
+    "orders_per_month",
+    "orders_per_month_status",
+    "prod_by_category",
+    "qty_per_product",
+    "qty_per_product_status",
+    "segment_avg_order_value",
+    "total_vs_status_revenue"
+  ],
+  "test_task_family": {
+    "12": "agg_price_by_category",
+    "14": "orders_per_month",
+    "16": "never_ordered_products",
+    "18": "qty_per_product",
+    "22": "argmax_revenue_by_group",
+    "24": "argmax_revenue_by_group",
+    "27": "avg_order_value",
+    "3": "prod_by_category",
+    "30": "argmax_qty_category",
+    "33": "avg_qty_having",
+    "36": "max_per_group",
+    "38": "segment_avg_order_value",
+    "40": "total_vs_status_revenue",
+    "5": "distinct_col",
+    "8": "cust_by_segment",
+    "9": "count_prod_by_category"
+  }
+}
