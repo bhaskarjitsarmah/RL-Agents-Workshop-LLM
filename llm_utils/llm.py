@@ -27,8 +27,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Observability is optional here (repo 1 hard-required it). -------------
+#
+# Only reach for the Langfuse drop-in when it is actually configured. Importing
+# it without keys emits an "Authentication error: ... client will be disabled"
+# banner, which would greet every participant at the top of every notebook and
+# read like something is broken. Absent keys is a normal state here, not a fault.
 LANGFUSE_AVAILABLE = False
+_LANGFUSE_CONFIGURED = bool(os.environ.get("LANGFUSE_PUBLIC_KEY")
+                            and os.environ.get("LANGFUSE_SECRET_KEY"))
 try:
+    if not _LANGFUSE_CONFIGURED:
+        raise ImportError("langfuse not configured")
     # Drop-in replacement for `openai`: identical API, every call traced.
     from langfuse.openai import OpenAI
     from langfuse import get_client, observe
