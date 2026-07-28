@@ -44,7 +44,10 @@ def check_syntax(mod_name: str, cells: list) -> list[str]:
         if kind != "code":
             continue
         try:
-            ast.parse(src)
+            # Jupyter permits top-level `await`; compile the way it does so a
+            # legitimate async cell is not reported as a syntax error.
+            # (ast.parse takes no flags -- compile does.)
+            compile(src, "<cell>", "exec", ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
         except SyntaxError as e:
             errors.append(f"{mod_name} cell {i}: {e.msg} (line {e.lineno})\n"
                           f"    {(src.splitlines() or [''])[max(e.lineno - 1, 0)][:100]}")

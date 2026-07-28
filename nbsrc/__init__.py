@@ -71,13 +71,27 @@ def COLAB_BADGE(nb_filename: str):
               f"colab-badge.svg)]({url})")
 
 
-def SETUP_CELL(needs_gpu: bool = False, extra_keys: tuple = ()):
+def SETUP_CELL(needs_gpu: bool = False, extra_keys: tuple = (),
+               wandb: bool = False):
     """Clone + install on Colab, no-op locally, then report capability.
 
     Idempotent: safe to re-run after the runtime restart that installing
     Unsloth forces (it replaces torch).
+
+    `wandb=True` *warns* about a missing key rather than raising. Requiring it
+    would block the replay path, and a participant with no GPU has no training
+    run to track in the first place -- refusing to open the notebook over a
+    missing key for a run they cannot start is the wrong failure.
     """
     keys = ", ".join(repr(k) for k in extra_keys)
+    wandb_note = '''
+if not CAP["wandb"]:
+    os.environ.setdefault("WANDB_MODE", "offline")
+    print()
+    print("No WANDB_API_KEY -> W&B set to offline mode.")
+    print("Training still runs and still logs; the curves land in ./wandb")
+    print("instead of the cloud dashboard.")
+''' if wandb else ""
     gpu_note = """
 if not CAP["gpu"]:
     print()
@@ -111,7 +125,7 @@ import matplotlib.pyplot as plt
 
 CAP = preflight({keys})
 use_house_style()
-print("Database ready at:", build_db()){gpu_note}
+print("Database ready at:", build_db()){gpu_note}{wandb_note}
 '''.strip())
 
 

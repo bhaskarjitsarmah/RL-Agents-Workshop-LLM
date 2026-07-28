@@ -26,6 +26,28 @@ matplotlib.use("Agg")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _exec_cell(src: str, i: int, ns: dict) -> None:
+    """Execute one cell, allowing top-level `await`.
+
+    NB5 drives OpenPipe ART, whose API is async, so its cells contain a bare
+    `await` at module level. That is legal in Jupyter (IPython compiles cells
+    with PyCF_ALLOW_TOP_LEVEL_AWAIT and drives the coroutine) but a SyntaxError
+    under a plain `exec`. Emulating it here keeps this harness a faithful check
+    of the notebook rather than a stricter one that would push us into writing
+    worse notebooks to satisfy the checker.
+    """
+    import asyncio
+    import ast as _ast
+
+    flags = _ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+    codeobj = compile(src, f"<cell {i}>", "exec", flags=flags)
+    if codeobj.co_flags & 0x80:          # CO_COROUTINE -> the cell awaits
+        asyncio.get_event_loop().run_until_complete(
+            eval(codeobj, ns))           # noqa: S307
+    else:
+        exec(codeobj, ns)                # noqa: S102
+
+
 def run(path: str, stop_on_error: bool = False) -> int:
     nb = json.load(open(path, encoding="utf-8"))
     cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
@@ -38,7 +60,7 @@ def run(path: str, stop_on_error: bool = False) -> int:
     for i, cell in enumerate(cells):
         src = "".join(cell["source"])
         try:
-            exec(compile(src, f"<cell {i}>", "exec"), ns)   # noqa: S102
+            _exec_cell(src, i, ns)
         except Exception:
             failures += 1
             print(f"\n--- CELL {i} FAILED " + "-" * 52)

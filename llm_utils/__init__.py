@@ -54,7 +54,8 @@ from .gen_tasks import (
 )
 from .rewards import (
     composite_reward, detect_reward_hacks, make_hackable_reward_fns,
-    make_trl_reward_fns, r_hackable_rowcount, reward_bounds,
+    make_trl_reward_fns, r_exec_match, r_executes, r_format, r_hackable_rowcount,
+    r_nonempty, r_safety, reward_bounds,
 )
 from .rollout import (
     SQLEnv, Trajectory, advantages, batch_rollout, learnable_band, rollout_group,
@@ -86,6 +87,7 @@ __all__ = [
     # reward
     "composite_reward", "reward_bounds", "make_trl_reward_fns",
     "make_hackable_reward_fns", "r_hackable_rowcount", "detect_reward_hacks",
+    "r_exec_match", "r_format", "r_executes", "r_nonempty", "r_safety",
     # MDP
     "SQLEnv", "Trajectory", "rollout_single_turn", "rollout_multi_turn",
     "rollout_group", "batch_rollout", "advantages", "summarize_group",
