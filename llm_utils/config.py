@@ -151,6 +151,40 @@ def torch_dtype():
     return torch.bfloat16 if gpu_report()["bf16"] else torch.float16
 
 
+def dtype_kwarg(dtype=None) -> dict:
+    """`{"dtype": ...}` or `{"torch_dtype": ...}` -- whichever this version takes.
+
+    transformers renamed `torch_dtype` to `dtype` in v5 and changed the default
+    to "auto". The old name then falls through to **kwargs and is IGNORED, so a
+    T4 asking for float16 quietly gets the checkpoint's bfloat16 instead. In
+    training that surfaces as a GradScaler crash; at inference it surfaces as
+    nothing at all -- just emulated bf16, slower, and a different dtype from the
+    one the adapter was trained in.
+
+    Decided from the version, not `inspect`: the Auto* classes take
+    `(*model_args, **kwargs)`, so the parameter never appears in the signature
+    under either name.
+    """
+    import transformers
+
+    major = int(transformers.__version__.split(".")[0])
+    return {"dtype" if major >= 5 else "torch_dtype": dtype or torch_dtype()}
+
+
+def quiet_generation_config(model) -> None:
+    """Drop `max_length` so it stops fighting our `max_new_tokens`.
+
+    Qwen ships `max_length=32768` in generation_config. Every single generate()
+    call then prints a five-line "Both max_new_tokens and max_length seem to
+    have been set" warning -- hundreds of them across one notebook, burying the
+    output participants are supposed to read. `max_new_tokens` was already
+    winning; this only stops the narration.
+    """
+    cfg = getattr(model, "generation_config", None)
+    if cfg is not None and getattr(cfg, "max_length", None):
+        cfg.max_length = None
+
+
 def free_vram() -> float:
     """Free GiB on device 0 (0.0 with no GPU). Print it before every big run."""
     try:

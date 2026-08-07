@@ -36,27 +36,8 @@ from __future__ import annotations
 import dataclasses
 import os
 
-from .config import ADAPTER_DIR, base_model, base_model_4bit, gpu_report, torch_dtype
-
-
-def _dtype_kwarg(dtype) -> dict:
-    """`{"dtype": ...}` or `{"torch_dtype": ...}` -- whichever this version takes.
-
-    transformers renamed `torch_dtype` to `dtype` in v5 and changed the default
-    to "auto". The old name then falls through to **kwargs and is IGNORED, so a
-    T4 asking for float16 quietly gets the checkpoint's bfloat16 instead. That
-    surfaces much later as a GradScaler crash inside `trainer.train()`
-    ("_amp_foreach_non_finite_check_and_unscale_ not implemented for
-    'BFloat16'"), which looks nothing like a dtype bug.
-
-    Decided from the version, not `inspect`: the Auto* classes take
-    `(*model_args, **kwargs)`, so the parameter never appears in the signature
-    under either name.
-    """
-    import transformers
-
-    major = int(transformers.__version__.split(".")[0])
-    return {"dtype" if major >= 5 else "torch_dtype": dtype}
+from .config import (ADAPTER_DIR, base_model, base_model_4bit, dtype_kwarg,
+                     gpu_report, quiet_generation_config, torch_dtype)
 
 
 def _assert_dtype(model, want) -> None:
@@ -155,6 +136,7 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
             # but it is one more component with its own opinion about Turing,
             # and a disagreement here costs a whole training run.
             _assert_dtype(model, dtype)
+            quiet_generation_config(model)
             print(f"[trainers] unsloth path, dtype={dtype}, model={mid}")
             _prep_tokenizer(tok)
             return model, tok
@@ -173,7 +155,7 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
     tok = AutoTokenizer.from_pretrained(base_model())
     model = AutoModelForCausalLM.from_pretrained(
         base_model(), quantization_config=quant, device_map="auto",
-        attn_implementation="sdpa", **_dtype_kwarg(dtype))
+        attn_implementation="sdpa", **dtype_kwarg(dtype))
     # Keeps LayerNorms and the LM head in fp32 -- the main defence against
     # fp16 LoRA producing NaN gradients on Turing.
     model = prepare_model_for_kbit_training(
@@ -187,6 +169,7 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
         if p.dtype.is_floating_point and p.dtype not in (dtype, torch.float32):
             p.data = p.data.to(torch.float32)
     _assert_dtype(model, dtype)
+    quiet_generation_config(model)
     model.config.use_cache = False   # incompatible with gradient checkpointing
     print(f"[trainers] hf path, dtype={dtype}, model={base_model()}")
     _prep_tokenizer(tok)

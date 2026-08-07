@@ -41,7 +41,8 @@ import time
 from typing import Callable
 
 from .agents import make_agent
-from .config import base_model, base_model_4bit, gpu_report, torch_dtype
+from .config import (base_model, base_model_4bit, dtype_kwarg, gpu_report,
+                     quiet_generation_config, torch_dtype)
 
 DEFAULT_STOP = ("```\n\n", "\n\nQuestion:", "<|im_end|>")
 
@@ -118,10 +119,16 @@ class LocalLM:
             ) if self.load_in_4bit else None
             self.tokenizer = AutoTokenizer.from_pretrained(mid)
             self.model = AutoModelForCausalLM.from_pretrained(
-                mid, quantization_config=quant, torch_dtype=dtype,
+                mid, quantization_config=quant,
                 device_map="auto", attn_implementation="sdpa",  # FA2 needs sm_80+
+                **dtype_kwarg(dtype),
             )
             self.model.eval()
+
+        # Every backend that owns a HF generation_config, in one place -- the
+        # unsloth path generates just as much as the hf one, and the warning
+        # fires per call, so missing a branch still buries the output.
+        quiet_generation_config(self.model)
 
         if self.tokenizer is not None:
             if self.tokenizer.pad_token is None:
