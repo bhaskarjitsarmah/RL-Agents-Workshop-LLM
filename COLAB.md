@@ -9,16 +9,37 @@ every training config in this repo:
 
 | | consequence |
 |---|---|
-| **no bfloat16** | `fp16=True, bf16=False` everywhere, and `dtype=torch.float16` passed explicitly — autodetection has chosen bf16 on unsupported cards before |
+| **no native bfloat16** | current PyTorch emulates it, and we use it anyway — see below |
 | **no FlashAttention-2** | `attn_implementation="sdpa"`; FA2 needs sm_80+ |
 | **vLLM is unreliable** | `use_vllm=False` and `fast_inference=False` by default; NB0–NB4 run on plain HF `generate` and accept the 2–4× slowdown |
 
-`llm_utils/config.torch_dtype()` is the single place that decision is made, so
-there is exactly one place to be wrong.
+### The dtype rule: decide once, read everywhere
 
-**fp16 + LoRA can diverge into non-finite gradients**, and it does so *silently* —
-you get a flat loss curve rather than an error, which reads as "the model didn't
-learn". `non_finite_loss_callback()` aborts loudly instead. Do not remove it.
+`llm_utils/config.torch_dtype()` is the single place the fp16-vs-bf16 decision is
+made, and `_precision_flags()` in `llm_utils/trainers.py` derives the trainer's
+`fp16=`/`bf16=` from that same flag. **Never set them by hand on a config.**
+
+That is not style. When the model loads in one dtype and the trainer is
+configured for the other, `fp16=True` makes Trainer install a `GradScaler` whose
+CUDA kernel exists only for `Half` and `Float`, and the first unscale dies with:
+
+```
+NotImplementedError: "_amp_foreach_non_finite_check_and_unscale_cuda"
+not implemented for 'BFloat16'
+```
+
+Two things used to allow that mismatch, both now closed: the configs hardcoded
+`fp16=True`, and `from_pretrained(torch_dtype=...)` was **silently ignored** on
+transformers v5, which renamed the argument to `dtype=`. `_dtype_kwarg()` picks
+the right name per version, and `_assert_dtype()` fails at load time rather than
+mid-run.
+
+On a T4 you will see `bf16=True dtype=bfloat16`. Emulated bf16 is slower than
+native fp16, and we take that trade deliberately: bf16 needs no scaler at all.
+
+**fp16 + LoRA can also diverge into non-finite gradients**, silently — you get a
+flat loss curve rather than an error, which reads as "the model didn't learn".
+`non_finite_loss_callback()` aborts loudly instead. Do not remove it.
 
 ## Installing Unsloth replaces torch → restart required
 

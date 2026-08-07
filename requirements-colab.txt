@@ -1,53 +1,85 @@
-# COLAB / GPU training stack.
+# COLAB / KAGGLE GPU TRAINING STACK.
 #
-# Read this before changing a pin: unpinned installs are the single most common
-# cause of a dead workshop. Colab's preinstalled torch moves without warning,
-# Unsloth replaces torch during install (forcing a runtime restart), and TRL's
-# GRPOConfig field names have churned repeatedly across minor versions.
+# Read this before changing a line.
 #
-# Target hardware: Google Colab free T4 -- Turing (sm_75), 16GB, fp16 ONLY.
-#   * no bfloat16          -> every config uses fp16=True, bf16=False
+# STRATEGY: layer on top of the host's PyTorch. DO NOT PIN torch.
+#
+# The previous version of this file pinned the whole Dec-2024 stack exactly
+# (torch==2.5.1, transformers==4.46.3, unsloth==2024.12.4, ...). That looked
+# reproducible and was not: on current Colab those pins do not resolve, the
+# install aborted, and -- because the setup cell ignored the exit code -- the
+# notebooks silently ran on Colab's stock packages instead. Participants then
+# hit "bitsandbytes>=0.46.1 required", "No module named 'trl'", and
+# "_amp_foreach_non_finite_check_and_unscale_ not implemented for BFloat16",
+# none of which name the actual cause.
+#
+# Pinning torch is also the expensive kind of wrong: it downgrades the host's
+# CUDA-matched build, forces a runtime restart mid-workshop, and breaks the
+# preinstalled packages compiled against the stock version.
+#
+# So: floors, not equalities, and torch comes from the host untouched. What the
+# code actually needs from these libraries is asserted at runtime instead --
+# `_filter_kwargs` in llm_utils/trainers.py drops config kwargs the installed
+# TRL does not define and prints what it dropped, and `_dtype_kwarg` handles the
+# transformers v4 -> v5 `torch_dtype` -> `dtype` rename. Version drift is
+# absorbed there, where it can be seen, rather than frozen here where it rots.
+#
+# BEFORE THE WORKSHOP, on a fresh Colab T4:
+#   python scripts/check_api_surface.py
+# It prints the real dataclass fields of SFTConfig/GRPOConfig for whatever
+# resolved today. Correct trainers.py against THAT, not against documentation.
+#
+# Target hardware: free T4 -- Turing (sm_75), 16GB.
 #   * no FlashAttention-2  -> attn_implementation="sdpa"
 #   * vLLM is unreliable   -> use_vllm=False / fast_inference=False by default
-#
-# VERIFY BEFORE THE WORKSHOP (see scripts/check_api_surface.py):
-#   python scripts/check_api_surface.py
-# It prints the actual dataclass fields of SFTConfig/GRPOConfig for the resolved
-# versions. Correct trainers.py against THAT, not against documentation.
+#   * fp16 vs bf16 is decided ONCE, in llm_utils/config.py:torch_dtype(), and
+#     every training config keys off the same flag. Never hardcode it again.
 
 # --- Everything from the local/CPU set ---
 -r requirements.txt
 
-# --- Core training stack (pin exactly; bump deliberately) ---
-# torchvision/torchaudio are pinned to the versions built for torch 2.5.1. They
-# are not used directly, but transformers probes torchvision on import; leaving
-# Colab's stock (torch-2.11-matched) versions in place raises
-# "operator torchvision::nms does not exist". Matching them here avoids that.
-torch==2.5.1
-torchvision==0.20.1
-torchaudio==2.5.1
-transformers==4.46.3
-trl==0.12.2
-peft==0.13.2
-accelerate==1.1.1
-datasets==3.1.0
-bitsandbytes==0.44.1
+# --- Training stack. NOT preinstalled on Colab; floors only. ---
+# bitsandbytes: 0.46.1 is the floor that loads 4-bit weights on Colab's current
+# torch. Older builds fail with "bitsandbytes>=... required" at model load.
+bitsandbytes>=0.46.1
+trl>=0.12
+peft>=0.13
+accelerate>=1.1
+datasets>=3.1
+transformers>=4.46
 
-# --- 4-bit LoRA fast path. Installing this replaces torch -> restart runtime. ---
-# Unsloth supports CUDA capability >= 7.0, so a T4 (7.5) trains fine. Its
-# vLLM-backed `fast_inference=True` path does NOT reliably work on Turing --
-# trainers.py defaults it off and falls back to plain HF `generate`.
-unsloth==2024.12.4
-unsloth_zoo==2024.12.4
+# --- torch is deliberately absent. ---
+# Colab and Kaggle ship a CUDA-matched build; installing our own replaces it,
+# forces a restart, and breaks torchvision ("operator torchvision::nms does not
+# exist"). If you are on a bare machine, install torch yourself first:
+#   https://pytorch.org/get-started/locally/
+
+# --- Unsloth (~2x faster 4-bit LoRA on a T4) is installed by the SETUP CELL, ---
+#     not from here, and UNPINNED.
+# It supports CUDA capability >= 7.0, so a T4 (7.5) trains fine, and it is what
+# makes NB3 fit in a lunch break. It is kept out of this file for one reason:
+# it is the heaviest install in the stack, and a resolve failure here would
+# abort the CORE install along with it. The setup cell installs it separately
+# and best-effort, so a bad day for unsloth costs speed, not the workshop --
+# trainers.py falls back to transformers + bitsandbytes and trains the same
+# adapter. Skip the attempt with USE_UNSLOTH=0.
+#
+# NOTE: unsloth is the one dependency that may still pull its own torch. The
+# setup cell checks for that afterwards and tells you to restart the runtime.
 
 # --- Serving (NB7). vLLM on Turing is best-effort: NB7 tries it, measures it if
 #     it loads, and falls back to FastAPI+transformers, then llama.cpp on CPU. ---
-# vllm==0.6.4.post1
+# vllm>=0.6.4
 fastapi>=0.115
 uvicorn>=0.32
 
-# --- OpenPipe ART (NB5). See the risk note in README: if LocalBackend will not
-#     initialize on a free T4, NB5 replays a pre-baked run and ships the exact
-#     code to run elsewhere. Installed last so a failure here cannot break the
-#     rest of the day. ---
-openpipe-art>=0.4.0
+# --- OpenPipe ART (NB5) is installed by the SETUP CELL, not from here. ---
+# Same reasoning as unsloth: it pulls heavy deps that can fail to resolve against
+# the host torch, and when it lived in this file a single failure aborted the
+# WHOLE install. The setup cell installs it separately and best-effort, so its
+# failure cannot break the core; NB5 replays a pre-baked run if it is absent, by
+# design. Nothing to do by hand.
+#
+# THE RULE, for anything added later: if a dependency is optional to the day,
+# it goes in the setup cell where its exit code can be ignored -- never here,
+# where `uv pip install -r` treats one bad resolve as a total failure.

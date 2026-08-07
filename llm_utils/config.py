@@ -124,8 +124,13 @@ def gpu_report() -> dict:
         capability=cap,
         total_gb=round(total_b / 1024**3, 2),
         free_gb=round(free_b / 1024**3, 2),
-        # T4 is sm_75 (Turing): fp16 only. Both of these are False there, and
-        # every training config in this repo keys off exactly that fact.
+        # Whether to run the whole pipeline (model load + trainer) in bf16.
+        # On current PyTorch this is True even on a T4 (bf16 is emulated on
+        # Turing). We WANT that: the 4-bit checkpoints compute in bf16, so bf16
+        # training keeps everything consistent AND avoids the fp16 GradScaler,
+        # whose kernel has no bf16 version ("_amp_foreach_non_finite_check_and_
+        # unscale_ not implemented for BFloat16"). The training configs key off
+        # this flag (fp16 = not bf16), so model and trainer never disagree.
         bf16=bool(torch.cuda.is_bf16_supported()),
         flash_attn=cap >= (8, 0),
         vllm_ok=cap >= (8, 0),

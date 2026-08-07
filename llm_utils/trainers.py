@@ -6,6 +6,11 @@ Everything here is shaped by one hardware fact: **a Colab T4 is Turing (sm_75)**
     no FlashAttention-2  -> attn_implementation="sdpa"
     vLLM unreliable      -> use_vllm=False, fast_inference=False
 
+Colab now also hands out L4s and A100s (sm_80+), which *do* have bf16. The
+precision flags therefore come from `_precision_flags()`, which reads the same
+`gpu_report()["bf16"]` that `torch_dtype()` does -- hardcoding fp16 while the
+model loads in bf16 crashes the GradScaler.
+
 fp16 + LoRA can produce non-finite gradients and a stuck GradScaler, which
 manifests as a *flat* loss curve rather than an error -- the worst kind of
 failure, because it looks like "the model didn't learn". `NonFiniteLossCallback`
@@ -32,6 +37,55 @@ import dataclasses
 import os
 
 from .config import ADAPTER_DIR, base_model, base_model_4bit, gpu_report, torch_dtype
+
+
+def _dtype_kwarg(dtype) -> dict:
+    """`{"dtype": ...}` or `{"torch_dtype": ...}` -- whichever this version takes.
+
+    transformers renamed `torch_dtype` to `dtype` in v5 and changed the default
+    to "auto". The old name then falls through to **kwargs and is IGNORED, so a
+    T4 asking for float16 quietly gets the checkpoint's bfloat16 instead. That
+    surfaces much later as a GradScaler crash inside `trainer.train()`
+    ("_amp_foreach_non_finite_check_and_unscale_ not implemented for
+    'BFloat16'"), which looks nothing like a dtype bug.
+
+    Decided from the version, not `inspect`: the Auto* classes take
+    `(*model_args, **kwargs)`, so the parameter never appears in the signature
+    under either name.
+    """
+    import transformers
+
+    major = int(transformers.__version__.split(".")[0])
+    return {"dtype" if major >= 5 else "torch_dtype": dtype}
+
+
+def _assert_dtype(model, want) -> None:
+    """Fail loudly here if the loaded weights are not the dtype we asked for.
+
+    Cheaper to catch at load time than 200 steps into a run.
+    """
+    import torch
+
+    bad = {p.dtype for p in model.parameters()
+           if p.dtype.is_floating_point and p.dtype not in (want, torch.float32)}
+    if bad:
+        raise RuntimeError(
+            f"asked for {want} but the model holds {sorted(str(d) for d in bad)}. "
+            f"transformers ({gpu_report()['transformers']}) probably ignored the "
+            f"dtype argument. Training would crash in the GradScaler.")
+
+
+def _precision_flags() -> dict:
+    """`fp16`/`bf16` Trainer flags matching the dtype the model is loaded in.
+
+    These MUST agree with `torch_dtype()`. `fp16=True` makes Trainer install a
+    GradScaler, whose CUDA kernel (`_amp_foreach_non_finite_check_and_unscale_`)
+    is implemented for Half and Float only. Load in bf16 and ask for fp16 and
+    the first unscale raises "not implemented for 'BFloat16'". bf16 needs no
+    scaler at all -- its exponent range is already fp32's.
+    """
+    use_bf16 = gpu_report()["bf16"]
+    return {"fp16": not use_bf16, "bf16": use_bf16}
 
 
 def _filter_kwargs(cls, kw: dict, verbose: bool = True) -> dict:
@@ -61,7 +115,7 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
 
 def load_4bit_policy(model_id: str | None = None, r: int = 16,
                      lora_alpha: int = 32, lora_dropout: float = 0.0,
-                     use_unsloth: bool = True, max_seq_len: int = 2048,
+                     use_unsloth: bool | None = None, max_seq_len: int = 2048,
                      gradient_checkpointing: bool = True):
     """Load the base model in 4-bit with a LoRA adapter attached.
 
@@ -69,11 +123,17 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
     projections -- about 36MB in fp16, which is why the pre-baked adapters are
     trivial to host and download mid-session.
 
-    Two paths on purpose: Unsloth is faster, and its install occasionally fails
-    on the day. The notebook prints which one it took.
+    Two paths on purpose. Unsloth is roughly 2x faster and is what makes NB3 fit
+    in a lunch break, so it is tried first -- but its install is the heaviest in
+    the stack and can fail on the day. `use_unsloth=None` (the default) means
+    "follow USE_UNSLOTH", which is on unless the participant set it to "0".
+    The transformers + bitsandbytes fallback trains the same adapter, slower.
+    The notebook prints which path it took; neither is an error.
     """
     import torch
 
+    if use_unsloth is None:
+        use_unsloth = os.environ.get("USE_UNSLOTH") != "0"
     dtype = torch_dtype()
     mid = model_id or base_model_4bit()
 
@@ -95,8 +155,9 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
             _prep_tokenizer(tok)
             return model, tok
         except Exception as e:  # noqa: BLE001
-            print(f"[trainers] unsloth unavailable ({e}); falling back to "
-                  "transformers + bitsandbytes")
+            print(f"[trainers] unsloth did not load ({e}); using transformers + "
+                  "bitsandbytes instead. Same adapter, slower. Not an error -- "
+                  "set USE_UNSLOTH=0 to skip the attempt entirely.")
 
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import (AutoModelForCausalLM, AutoTokenizer,
@@ -107,8 +168,8 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
                                bnb_4bit_use_double_quant=True)
     tok = AutoTokenizer.from_pretrained(base_model())
     model = AutoModelForCausalLM.from_pretrained(
-        base_model(), quantization_config=quant, torch_dtype=dtype,
-        device_map="auto", attn_implementation="sdpa")
+        base_model(), quantization_config=quant, device_map="auto",
+        attn_implementation="sdpa", **_dtype_kwarg(dtype))
     # Keeps LayerNorms and the LM head in fp32 -- the main defence against
     # fp16 LoRA producing NaN gradients on Turing.
     model = prepare_model_for_kbit_training(
@@ -116,6 +177,12 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
     model = get_peft_model(model, LoraConfig(
         r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout or 0.05,
         bias="none", task_type="CAUSAL_LM", target_modules=LORA_TARGETS))
+    # peft no longer upcasts unconditionally, so a checkpoint that arrived in a
+    # dtype the GradScaler cannot unscale still has to be repaired by hand.
+    for p in model.parameters():
+        if p.dtype.is_floating_point and p.dtype not in (dtype, torch.float32):
+            p.data = p.data.to(torch.float32)
+    _assert_dtype(model, dtype)
     model.config.use_cache = False   # incompatible with gradient checkpointing
     print(f"[trainers] hf path, dtype={dtype}, model={base_model()}")
     _prep_tokenizer(tok)
@@ -143,7 +210,7 @@ def t4_sft_config(output_dir: str, **overrides):
         weight_decay=0.01, max_grad_norm=0.3, optim="paged_adamw_8bit",
         per_device_train_batch_size=2, gradient_accumulation_steps=4,
         num_train_epochs=2,
-        fp16=True, bf16=False, gradient_checkpointing=True,
+        **_precision_flags(), gradient_checkpointing=True,
         logging_steps=5, save_steps=100, save_total_limit=2,
         report_to="wandb", seed=3407,
         max_length=1024, max_seq_length=1024,   # name churned; filter keeps one
@@ -175,7 +242,7 @@ def t4_grpo_config(output_dir: str, num_generations: int = 8, **overrides):
         beta=0.02,                       # KL anchor to the frozen reference
         loss_type="dr_grpo", scale_rewards=False,
         epsilon=0.2, num_iterations=1,
-        fp16=True, bf16=False, gradient_checkpointing=True,
+        **_precision_flags(), gradient_checkpointing=True,
         max_steps=150, logging_steps=1, save_steps=25, save_total_limit=3,
         report_to="wandb", use_vllm=False, log_completions=True,
         seed=3407,

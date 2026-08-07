@@ -4,15 +4,12 @@ No-nonsense, copy-paste setup for **Self-Improving Agents by Optimizing the
 Weights**. Follow it top to bottom. It works on a free Google Colab T4 and on a
 free Kaggle T4 — pick **one** track below.
 
-> **TL;DR** — Open a notebook in Colab → set runtime to **T4 GPU** →
-> **Runtime → Run all**. The first cell installs everything (~3 min). If that
-> very first run stops with a torch message, **Restart session** once and **Run
-> all** again. Restart the runtime before each new notebook. That's the whole game.
+> **TL;DR** — Open a notebook in Colab → set runtime to **T4 GPU** → **Runtime →
+> Run all**. Restart the runtime before each new notebook. That's the whole game.
 
 The nine notebooks are meant to be run **in order, NB0 → NB8**. Each one is
-self-contained: the first cell clones the repo and installs the pinned stack (with
-`uv`) on its own. You do **not** install anything on your laptop, and there are
-**no manual pip commands** — it's handled for you.
+self-contained: the first cell clones the repo, installs the stack, reads your
+keys, and prepares the data. Nothing is pasted in by hand.
 
 ---
 
@@ -20,10 +17,10 @@ self-contained: the first cell clones the repo and installs the pinned stack (wi
 
 | Thing | Required? | Notes |
 |---|---|---|
-| A Google account | ✅ (for Colab) | Colab is free; a T4 is not *guaranteed* on free tier but usually available. |
-| A Weights & Biases key | ⭐ Recommended | Free at <https://wandb.ai/authorize>. Without it, training still runs — curves just save locally instead of the cloud dashboard. |
-| An OpenAI key | ❌ Optional | Only for the `gpt-4o-mini` comparison rows in NB0 / NB8. Without it, the published number is used instead. A few cents if you do use it. |
-| A Hugging Face token | ❌ Optional | Only if you want to push **your own** trained adapter. The pre-baked ones are public. |
+| A Google account | **Required** (for Colab) | Colab is free; a T4 is not *guaranteed* on free tier but usually available. |
+| A Weights & Biases key | Recommended | Free at <https://wandb.ai/authorize>. Without it, training still runs — curves just save locally instead of the cloud dashboard. |
+| An OpenAI key | Optional | Only for the `gpt-4o-mini` comparison rows in NB0 / NB8. Without it, the published number is used instead. A few cents if you do use it. |
+| A Hugging Face token | Optional | Only if you want to push **your own** trained adapter. The pre-baked ones are public. |
 
 **You do not need:** a GPU of your own, a vector database, Langfuse, or any paid
 service. The training loop makes **zero API calls** — the model runs on the free
@@ -67,29 +64,17 @@ the #1 avoidable mistake.)
 
 Easiest way — Colab Secrets:
 
-1. Click the **🔑 key icon** in the left sidebar.
+1. Click the **key icon** in the left sidebar.
 2. **+ Add new secret**, name `WANDB_API_KEY`, paste your key, enable *Notebook
    access*. (Repeat for `OPENAI_API_KEY` if you want the `gpt-4o-mini` rows.)
 
-> ⚠️ **Adding a secret is not enough.** Colab keeps secrets locked away — a key
-> in the panel is **not** in the environment until your code pulls it out with
-> `userdata.get(...)`. And the `CAP` variable (which decides whether the
-> `gpt-4o-mini` / W&B cells fire) is computed **once, in the setup cell**. So you
-> must load the key **and then re-run the setup cell**, or `CAP` stays stale and
-> the key looks ignored.
+That's all. The setup cell reads the secrets itself. Two rules:
 
-…paste this as a **new cell at the very top**, above the setup cell, run it, then
-run the setup cell:
+- *Notebook access* must be **on** for each secret, or Colab hides it.
+- Add secrets **before** running the setup cell. It reads them once; add one
+  afterwards and it looks ignored. Fix by re-running the setup cell.
 
-```python
-import os
-from google.colab import userdata
-os.environ["WANDB_API_KEY"] = userdata.get("WANDB_API_KEY")
-# Optional — only if you want the gpt-4o-mini comparison rows (NB0 / NB8):
-os.environ["OPENAI_API_KEY"] = userdata.get("OPENAI_API_KEY")
-```
-
-**Already ran the setup cell and the key was ignored?** Don't re-run everything —
+**Added the key after the setup cell ran?** Don't re-run everything —
 fix `CAP` in place with this cell, then re-run the `gpt-4o-mini` cell:
 
 ```python
@@ -112,28 +97,33 @@ print(bool(userdata.get("OPENAI_API_KEY")))     # True = name + Notebook-access 
 **No W&B key?** Skip it entirely. Training still runs; the setup cell
 automatically switches W&B to offline mode and tells you so.
 
-### 5. Run all
+### 5. Nothing to install by hand
 
-**Runtime → Run all.** The first cell installs the pinned stack with `uv`
-(~3 minutes the first time) and then reports your GPU. A healthy first cell ends
-with:
+The notebook's first cell clones the repo, installs everything, reads your Colab
+Secrets, and prepares the data. Do not add a cell. Do not run `!pip install`.
+
+It takes 1–2 minutes the first time. Two of its lines are best-effort and may
+print a failure — that is fine and expected:
+
+- **unsloth** — a 2x speedup. Without it, training runs on transformers +
+  bitsandbytes and produces the same adapter, just slower.
+- **openpipe-art** — NB5 only. Without it, NB5 replays a pre-baked run.
+
+If the **core** install fails, the cell stops with `CORE INSTALL FAILED`. Restart
+the session and run again.
+
+### 6. Then Run all
+
+**Runtime → Run all.** The setup cell reports your GPU; a healthy run shows:
 
 ```
-GPU: Tesla T4  sm_75  14.7 GB  bf16=False  dtype=float16
+GPU: Tesla T4  sm_75  14.7 GB  bf16=True  dtype=bfloat16
+versions: torch=...  transformers=...  trl=...  peft=...
+keys present: WANDB_API_KEY
 ```
 
-`bf16=False` is **correct** — a T4 is a Turing card and only does fp16. Every
-config in the repo depends on that.
-
-### 6. If the first run stops with a torch error — restart once
-
-On a fresh runtime this usually just works. But if the *first* run ever stops with
-a torch-related error (it changed torch underneath a already-imported copy), do
-this **once**:
-
-**Runtime → Restart session → Run all** again. The second time, everything is
-already installed, so it's fast and clean. You will not need to do this again for
-that notebook.
+`bf16=True` on a T4 is correct — leave it alone. Never set `fp16=` or `bf16=` on
+a training config by hand; the notebooks derive both from one place.
 
 Read the markdown between the cells as they run — that's the workshop. No live
 training cell runs longer than ~25 minutes.
@@ -177,17 +167,20 @@ import os, sys
 if not os.path.exists("/kaggle/working/RL-Agents-Workshop-LLM"):
     os.system("git clone -q https://github.com/bhaskarjitsarmah/RL-Agents-Workshop-LLM.git /kaggle/working/RL-Agents-Workshop-LLM")
 os.chdir("/kaggle/working/RL-Agents-Workshop-LLM")
-# uv, not pip: it resolves the pinned stack cleanly (same as the Colab setup cell).
+# uv, not pip: same resolution, much faster (identical to the Colab setup cell).
 os.system(f"{sys.executable} -m pip install -q uv")
 os.system(f"{sys.executable} -m uv pip install --system -q -r requirements-colab.txt")
+# Optional speedup, best-effort. If it fails, training still runs, just slower.
+os.system(f"{sys.executable} -m uv pip install --system -q unsloth unsloth_zoo")
 
 # Optional: W&B (add these as Kaggle "Secrets" under Add-ons -> Secrets)
 # from kaggle_secrets import UserSecretsClient
 # os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("WANDB_API_KEY")
 ```
 
-Run it. **If torch gets replaced, restart the kernel** (top menu → **Run →
-Restart kernel**) and re-run this cell — same rule as Colab.
+Run it. If it reports a new torch version, **restart the kernel** (top menu →
+**Run → Restart kernel**) and re-run it. Only the unsloth line can cause that;
+drop it if you'd rather not risk the restart.
 
 ### 4. Run the notebook's own setup cell, then the rest
 
@@ -225,7 +218,9 @@ discussion.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A later cell says `bitsandbytes>=… required` / `torchvision::nms does not exist` / `unexpected keyword argument 'dtype'` | The install didn't fully take (rare, on a messy runtime). | **Runtime → Restart session → Run all**. On a fresh runtime the `uv` install is clean. |
+| `bitsandbytes>=… required` / `No module named 'trl'` / `torchvision::nms does not exist` | The install didn't take — you're on Colab's stock packages. | **Runtime → Restart session → Run all**. Don't paste `!pip install` cells to patch around it. |
+| `NotImplementedError: … not implemented for 'BFloat16'` | Old clone: model and trainer disagree on dtype. | `!rm -rf /content/RL-Agents-Workshop-LLM`, then re-run the setup cell to get the current code. |
+| `[trainers] unsloth did not load …` | — | **Not an error.** Training continues, ~2x slower, same result. |
 | `GPU: none -> replay mode` | You're on a CPU runtime. | Runtime → Change runtime type → **T4 GPU**, re-run the setup cell. |
 | Cryptic **CUDA error** a few cells in | You skipped the torch-replaced restart. | Runtime → **Restart session**, re-run the setup cell, then continue. |
 | **Out of memory** mid-training | Leftover model from the previous notebook. | Restart the runtime before each notebook. In-place: `lm.unload(); empty_cache()`. |
@@ -242,11 +237,14 @@ discussion.
 
 - **Run the Colab GPU check the day before.** It's the only step that can fail in
   a way you can't fix in the room. Open NB0's badge, set T4, run the first cell,
-  confirm you see `GPU: Tesla T4 … bf16=False`.
+  confirm `GPU: Tesla T4 …` and a `versions:` line listing `trl` and `peft`. A
+  missing `versions:` entry means the install didn't take.
+- **Run `python scripts/check_api_surface.py` on that same runtime** — it prints
+  the real `SFTConfig`/`GRPOConfig` fields, in case TRL renamed one.
 - **Do a dry run of NB0 → NB3** end to end on a fresh Colab runtime, timing each.
 - Have your **W&B key** and (optionally) **OpenAI key** ready as Colab Secrets.
 
-> ⚠️ **Known gap to close before the workshop:** the repo's `.gitignore` says the
+> **Known gap to close before the workshop:** the repo's `.gitignore` says the
 > pre-baked replay results in `data/results/*.json` are checked in, but **they
 > currently are not** (the directory is empty). On a live T4 this rarely bites,
 > because training cells run for real. But anyone in **replay mode** (no GPU), or

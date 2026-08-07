@@ -109,14 +109,64 @@ if IN_COLAB:
         subprocess.run(["git", "clone", "-q",
                         "{REPO_URL}.git", "/content/{REPO_NAME}"], check=True)
     os.chdir("/content/{REPO_NAME}")
-    # Install with uv, not pip: uv's resolver installs the pinned stack cleanly
-    # on current Colab, where pip's resolver aborts the whole install (and then
-    # the notebook runs on Colab's stock torch/transformers, which is the cause
-    # of the "bitsandbytes>=..." / "torchvision::nms" / "unexpected dtype" errors).
-    print("Installing the pinned stack (2-4 min the first time)...")
+    # Colab's own keyring, read BEFORE preflight computes CAP -- otherwise the
+    # notebook decides "no W&B key" while the key sits unread in the sidebar.
+    # Absent secrets are normal, not an error: everything downgrades gracefully.
+    try:
+        from google.colab import userdata
+        for _k in ("WANDB_API_KEY", "OPENAI_API_KEY", "HF_TOKEN"):
+            try:
+                os.environ.setdefault(_k, userdata.get(_k) or "")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    for _k in [k for k, v in list(os.environ.items()) if v == ""]:
+        del os.environ[_k]          # empty != set; CAP tests truthiness
+
+    # Install with uv, not pip: same resolution, several times faster on Colab.
+    # The CORE layers on top of Colab's torch and never replaces it -- see the
+    # header of requirements-colab.txt for why pinning torch broke this before.
+    print("Installing the training stack with uv (1-2 min the first time)...")
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "uv"], check=True)
-    subprocess.run([sys.executable, "-m", "uv", "pip", "install", "--system", "-q",
-                    "-r", "requirements-colab.txt"], check=False)
+
+    def _uv(*pkgs):
+        return subprocess.run([sys.executable, "-m", "uv", "pip", "install",
+                               "--system", "-q", *pkgs]).returncode
+
+    # CORE -- must succeed. Fail loudly instead of continuing on stock packages:
+    # a swallowed install failure surfaces 10 cells later as a dtype or
+    # bitsandbytes error that names nothing resembling its cause.
+    if _uv("-r", "requirements-colab.txt") != 0:
+        print("*** CORE INSTALL FAILED -- scroll up for the uv error. ***")
+        raise SystemExit("core install failed -- see WORKSHOP_GUIDE.md")
+
+    # NB5's openpipe-art, best-effort: it can fail to resolve, and NB5 falls back
+    # to a pre-baked run if it is absent. A failure here must not break the core.
+    _uv("openpipe-art>=0.4.0")
+
+    # Unsloth: ~2x faster LoRA on a T4, which is the difference between NB3
+    # fitting in a lunch break and not. Installed HERE rather than in
+    # requirements-colab.txt, and UNPINNED.
+    #   * unpinned, because the old `unsloth==2024.12.4` pin required torch
+    #     2.5.1 and was what made the entire install abort;
+    #   * here rather than in the requirements file, because this is the one
+    #     dependency heavy enough to fail on the day, and a failure has to
+    #     degrade to the transformers + bitsandbytes path, not kill the core.
+    # Skip it with:  os.environ["USE_UNSLOTH"] = "0"  above this cell.
+    if os.environ.get("USE_UNSLOTH") != "0":
+        if _uv("unsloth", "unsloth_zoo") != 0:
+            print("unsloth did not install -- continuing on transformers + "
+                  "bitsandbytes. Same adapter, slower. This is not an error.")
+
+    # Unsloth CAN drag a different torch in. If it did, the kernel must restart
+    # before anything imports torch, or you get a cryptic CUDA error later.
+    from importlib.metadata import version as _ver
+    if "torch" in sys.modules and sys.modules["torch"].__version__ != _ver("torch"):
+        print("=" * 68)
+        print("  torch was replaced. Runtime -> Restart session, then Run all again.")
+        print("=" * 68)
+        raise SystemExit("restart required -- see the message above")
 else:
     # Run from the REPO ROOT in both environments, so every relative path in
     # every notebook ("data/...") means the same thing whether you are on Colab
