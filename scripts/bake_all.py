@@ -35,7 +35,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from llm_utils.config import (ADAPTER_DIR, adapter_repo, base_model_4bit,  # noqa: E402
-                              capability, have_result, load_result, save_result)
+                              capability, empty_cache, have_result,
+                              load_result, save_result)
 from llm_utils.db import build_db  # noqa: E402
 from llm_utils.gen_tasks import read_jsonl  # noqa: E402
 
@@ -232,7 +233,11 @@ def _sft_ablations(force: bool) -> None:
                         callbacks=[non_finite_loss_callback()])
         tr.train()
         tr.save_model(adir)
+        # Three train-then-score cycles in one process. `del` alone leaves the
+        # weights in torch's caching allocator, so arm 2 would load on top of
+        # arm 1 and OOM a 14.5 GB T4 partway through the bake.
         del model, tr
+        empty_cache()
 
         scored = LocalLM(base_model_4bit(), adapter=adir)
         r = evaluate(make_local_agent(scored), split="test")
