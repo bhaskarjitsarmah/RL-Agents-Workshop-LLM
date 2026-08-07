@@ -109,7 +109,13 @@ if IN_COLAB:
         subprocess.run(["git", "clone", "-q",
                         "{REPO_URL}.git", "/content/{REPO_NAME}"], check=True)
     os.chdir("/content/{REPO_NAME}")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+    # Install with uv, not pip: uv's resolver installs the pinned stack cleanly
+    # on current Colab, where pip's resolver aborts the whole install (and then
+    # the notebook runs on Colab's stock torch/transformers, which is the cause
+    # of the "bitsandbytes>=..." / "torchvision::nms" / "unexpected dtype" errors).
+    print("Installing the pinned stack (2-4 min the first time)...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "uv"], check=True)
+    subprocess.run([sys.executable, "-m", "uv", "pip", "install", "--system", "-q",
                     "-r", "requirements-colab.txt"], check=False)
 else:
     # Run from the REPO ROOT in both environments, so every relative path in

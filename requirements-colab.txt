@@ -19,7 +19,13 @@
 -r requirements.txt
 
 # --- Core training stack (pin exactly; bump deliberately) ---
+# torchvision/torchaudio are pinned to the versions built for torch 2.5.1. They
+# are not used directly, but transformers probes torchvision on import; leaving
+# Colab's stock (torch-2.11-matched) versions in place raises
+# "operator torchvision::nms does not exist". Matching them here avoids that.
 torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 transformers==4.46.3
 trl==0.12.2
 peft==0.13.2

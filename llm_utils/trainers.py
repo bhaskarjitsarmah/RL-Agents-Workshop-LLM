@@ -107,7 +107,7 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
                                bnb_4bit_use_double_quant=True)
     tok = AutoTokenizer.from_pretrained(base_model())
     model = AutoModelForCausalLM.from_pretrained(
-        base_model(), quantization_config=quant, dtype=dtype,
+        base_model(), quantization_config=quant, torch_dtype=dtype,
         device_map="auto", attn_implementation="sdpa")
     # Keeps LayerNorms and the LM head in fp32 -- the main defence against
     # fp16 LoRA producing NaN gradients on Turing.
@@ -263,7 +263,7 @@ def merge_and_save(adapter_dir: str, out_dir: str, base_id: str | None = None,
     base_id = base_id or base_model()
     tok = AutoTokenizer.from_pretrained(base_id)
     model = AutoModelForCausalLM.from_pretrained(
-        base_id, dtype=getattr(torch, dtype), device_map="cpu")
+        base_id, torch_dtype=getattr(torch, dtype), device_map="cpu")
     model = PeftModel.from_pretrained(model, adapter_dir)
     model = model.merge_and_unload()
     os.makedirs(out_dir, exist_ok=True)

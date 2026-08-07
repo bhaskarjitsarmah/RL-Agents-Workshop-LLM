@@ -118,7 +118,7 @@ class LocalLM:
             ) if self.load_in_4bit else None
             self.tokenizer = AutoTokenizer.from_pretrained(mid)
             self.model = AutoModelForCausalLM.from_pretrained(
-                mid, quantization_config=quant, dtype=dtype,
+                mid, quantization_config=quant, torch_dtype=dtype,
                 device_map="auto", attn_implementation="sdpa",  # FA2 needs sm_80+
             )
             self.model.eval()
