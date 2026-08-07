@@ -282,28 +282,26 @@ entirely) and compare on test-16 and test_ext. This is the question every
 audience asks about a generated training set; we answer it before it is asked.
 """),
     code(r"""
-from llm_utils import load_result, save_result
+from llm_utils import evaluate, load_result, save_result
+from llm_utils.config import ADAPTER_DIR, empty_cache
+from llm_utils.datasets import to_sft_dataset
+from llm_utils.evaluate_batch import evaluate_jsonl, make_batch_agent
+from llm_utils.gen_tasks import read_jsonl
+from llm_utils.local_llm import make_local_agent
+from llm_utils.trainers import non_finite_loss_callback, t4_sft_config
 
-# Compute it if we can, replay it if we cannot, and CACHE either way. The two
-# ablation arms are two more SFT runs -- cheap on this data (a couple of minutes
-# each) and far better than telling you to go run a script and come back.
+# Compute it if we can, replay it if we cannot, and CACHE either way -- far
+# better than telling you to go run a script and come back.
 ABL_TASKS = 40                       # per arm; all three share one budget or
                                      # the comparison measures budget, not method
-abl = load_result("nb2_ablations")
-if abl is None and CAP["gpu"]:
+
+
+def run_ablations(n_tasks=ABL_TASKS):
+    # Three arms, one task budget. Same shape as the baked artifact.
     from trl import SFTTrainer
-    from llm_utils import evaluate
-    from llm_utils.config import ADAPTER_DIR, empty_cache
-    from llm_utils.evaluate_batch import evaluate_jsonl, make_batch_agent
-    from llm_utils.gen_tasks import read_jsonl
-    from llm_utils.local_llm import make_local_agent
-    from llm_utils.trainers import non_finite_loss_callback, t4_sft_config
 
-    noleak = read_jsonl("data/tasks_train_noleak_gen.jsonl")[:ABL_TASKS]
-    src = train[:ABL_TASKS]
-    print(f"Running the ablations live on {ABL_TASKS} tasks per arm "
-          f"(~10-15 min). They cache, so this happens once.")
-
+    noleak = read_jsonl("data/tasks_train_noleak_gen.jsonl")[:n_tasks]
+    src = train[:n_tasks]
     pol = LocalLM(base_model_4bit())
     arms = {
         "filtered":   star_sample(pol.as_policy(), src, k=4, temperature=0.8),
@@ -313,27 +311,47 @@ if abl is None and CAP["gpu"]:
     }
     pol.unload(); empty_cache()
 
-    abl = {"test16": {}, "test_ext": {}}
+    out = {"test16": {}, "test_ext": {}}
     for nm, recs in arms.items():
         if not recs:
             print(f"  {nm}: STaR kept nothing -- skipping this arm")
             continue
-        from llm_utils.datasets import to_sft_dataset
         m, _ = load_4bit_policy()
         ad = os.path.join(ADAPTER_DIR, f"abl-{nm}")
         t = SFTTrainer(model=m, train_dataset=to_sft_dataset(recs),
                        args=t4_sft_config(ad),
                        callbacks=[non_finite_loss_callback()])
         t.train(); t.save_model(ad)
-        del m, t; empty_cache()
+        del m, t; empty_cache()          # or arm 3 loads on top of arm 1
+
         sc = LocalLM(base_model_4bit(), adapter=ad)
         r = evaluate(make_local_agent(sc), split="test")
-        abl["test16"][nm] = [sum(x["correct"] for x in r["records"]), r["n"]]
+        out["test16"][nm] = [sum(x["correct"] for x in r["records"]), r["n"]]
         rb = evaluate_jsonl(make_batch_agent(sc), "data/tasks_test_ext_gen.jsonl")
-        abl["test_ext"][nm] = [sum(x["correct"] for x in rb["records"]), rb["n"]]
+        out["test_ext"][nm] = [sum(x["correct"] for x in rb["records"]), rb["n"]]
         sc.unload(); empty_cache()
-        print(f"  {nm}: {len(recs)} pairs  test16 {abl['test16'][nm]}")
-    save_result("nb2_ablations", abl)
+        print(f"  {nm}: {len(recs)} pairs  test16 {out['test16'][nm]}")
+    return out
+
+
+abl = load_result("nb2_ablations")
+if abl is None and CAP["gpu"]:
+    # The warm start above is still holding VRAM. Three more models are about
+    # to load; drop it first or the last arm OOMs a 14.5 GB T4.
+    for _n in ("trainer", "model"):
+        if _n in dir():
+            del globals()[_n]
+    empty_cache()
+    print(f"Running the ablations live on {ABL_TASKS} tasks per arm "
+          f"(~10-15 min). The result caches, so this happens once.")
+    try:
+        abl = run_ablations()
+        save_result("nb2_ablations", abl)
+    except Exception as e:          # a failed ablation must not kill Run-all
+        abl = None
+        print(f"\nAblations did not finish: {type(e).__name__}: {e}")
+        print("The rest of the notebook is unaffected. Re-run this cell to "
+              "retry, or lower ABL_TASKS if it ran out of memory.")
 elif abl is None:
     abl = baked("nb2_ablations",
                   "python scripts/bake_all.py --stage sft")

@@ -125,14 +125,13 @@ print("the episode did.")
 ## 4. Train it
 """),
     code(r"""
-mt_hist = None
-if CAP["gpu"]:
-    print("Live multi-turn training is ~3x the generation cost per step.")
-    print("The notebook runs 15 steps as a demonstration; the pre-baked run is 100.")
-    mt_hist = baked("nb4_multiturn",
-                  "python scripts/bake_all.py --stage multiturn")
-else:
-    mt_hist = baked("nb4_multiturn",
+# NOTE: this curve is REPLAY-ONLY, on every machine including a GPU one.
+# Multi-turn RL needs a trainer that credits a reward across a whole tool
+# trajectory; this repo ships the rollout machinery (`rollout_multi_turn`,
+# `batch_rollout`) and the reward, but not that trainer. The sweeps below are
+# live and are where the multi-turn lesson actually lands -- they measure the
+# behaviour this curve would be optimising.
+mt_hist = baked("nb4_multiturn",
                   "python scripts/bake_all.py --stage multiturn")
 
 if mt_hist:
