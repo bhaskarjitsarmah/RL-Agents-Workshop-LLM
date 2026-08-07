@@ -140,6 +140,10 @@ def stage_star(force: bool) -> None:
     train = read_jsonl(os.path.join(DATA, "tasks_train_gen.jsonl"))
     recs = star_sample(lm.as_policy(), train, k=4, temperature=0.8)
     write_records(dedup_sft(recs), star_path())
+    # Also as a result artifact: NB2's no-GPU path calls baked("star_sft") and
+    # reads data/results/, not data/*.jsonl, so the .jsonl alone left replay
+    # mode with no records at all.
+    save_result("star_sft", dedup_sft(recs))
     log(f"  kept {len(recs)} pairs; yield by level: {star_yield(recs, train)}")
 
     # The NB2 ablation: keep everything, right or wrong. The filter IS the method.
@@ -168,6 +172,78 @@ def stage_sft(force: bool) -> None:
     save_result("nb2_sft", tr.state.log_history)
     if os.environ.get("HF_TOKEN"):
         push_adapter(out, adapter_repo("star-sft"))
+    _sft_ablations(force)
+
+
+#: Tasks per arm for the NB2 ablations. All three arms MUST use the same
+#: budget or the comparison is meaningless -- an arm trained on more tasks
+#: wins for reasons that have nothing to do with what is being ablated.
+#: 60 matches NB2's live demo slice; raise it for a full pre-bake.
+ABL_TASKS = int(os.environ.get("BAKE_ABL_TASKS", "60"))
+
+
+def _sft_ablations(force: bool) -> None:
+    """NB2's two honesty checks, as three arms trained on one task budget.
+
+    (a) `unfiltered` keeps every generation, right or wrong. If it matches
+        `filtered`, the correctness filter was decorative and STaR is doing
+        nothing -- the claim the whole notebook rests on.
+    (b) `no-leak` trains on train_noleak, where test patterns are removed
+        entirely, and is scored on the same held-out sets. The gap between it
+        and `filtered` is the part of the gain that was memorisation.
+
+    Each arm re-samples its own data because the ablation is about *what you
+    train on*; reusing one dataset across arms would ablate nothing.
+    """
+    from trl import SFTTrainer
+
+    from llm_utils import evaluate
+    from llm_utils.datasets import star_sample, to_sft_dataset
+    from llm_utils.evaluate_batch import evaluate_jsonl, make_batch_agent
+    from llm_utils.local_llm import LocalLM, make_local_agent
+    from llm_utils.trainers import (load_4bit_policy, non_finite_loss_callback,
+                                    t4_sft_config)
+
+    if skip("nb2_ablations", force):
+        return
+
+    train = read_jsonl(os.path.join(DATA, "tasks_train_gen.jsonl"))[:ABL_TASKS]
+    noleak = read_jsonl(
+        os.path.join(DATA, "tasks_train_noleak_gen.jsonl"))[:ABL_TASKS]
+
+    lm = LocalLM(base_model_4bit())
+    arms = {
+        "filtered": star_sample(lm.as_policy(), train, k=4, temperature=0.8),
+        "unfiltered": star_sample(lm.as_policy(), train, k=4, temperature=0.8,
+                                  filter_correct=False),
+        "no-leak": star_sample(lm.as_policy(), noleak, k=4, temperature=0.8),
+    }
+    lm.unload()
+
+    out: dict = {"test16": {}, "test_ext": {}}
+    for name, recs in arms.items():
+        if not recs:
+            log(f"  {name}: STaR kept nothing -- skipping this arm")
+            continue
+        model, _ = load_4bit_policy()
+        adir = os.path.join(ADAPTER_DIR, f"abl-{name}")
+        tr = SFTTrainer(model=model, train_dataset=to_sft_dataset(recs),
+                        args=t4_sft_config(adir),
+                        callbacks=[non_finite_loss_callback()])
+        tr.train()
+        tr.save_model(adir)
+        del model, tr
+
+        scored = LocalLM(base_model_4bit(), adapter=adir)
+        r = evaluate(make_local_agent(scored), split="test")
+        out["test16"][name] = [sum(x["correct"] for x in r["records"]), r["n"]]
+        rb = evaluate_jsonl(make_batch_agent(scored),
+                            os.path.join(DATA, "tasks_test_ext_gen.jsonl"))
+        out["test_ext"][name] = [sum(x["correct"] for x in rb["records"]), rb["n"]]
+        scored.unload()
+        log(f"  {name}: {len(recs)} pairs, test16 {out['test16'][name]}, "
+            f"test_ext {out['test_ext'][name]}")
+    save_result("nb2_ablations", out)
 
 
 def stage_grpo(force: bool, steps: int = 300) -> None:

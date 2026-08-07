@@ -124,6 +124,31 @@ def test_every_baked_key_has_a_producer():
     stages = set(re.findall(r'\("([a-z]+)", stage_', src))
     assert stages, "could not parse the stage list out of bake_all.py"
 
+    # The key each stage actually WRITES, not the key its description claims.
+    # Checking the description is how the dead ends below shipped: the `sft`
+    # stage's docstring advertised `nb2_ablations` and no code ever wrote it, so
+    # the cell told participants to run a command that could not help them.
+    # A stage name existing is not evidence of a producer.
+    produced = {k.rstrip("/") for k in
+                re.findall(r'save_result\(\s*f?"([^"{]*)', src)}
+
+    def has_producer(key: str) -> bool:
+        # f-string keys ("pathologies/{k}") match on their literal prefix.
+        return key.split("{")[0].rstrip("/") in produced
+
+    #: Keys the notebooks offer a replay for that nothing in bake_all.py writes
+    #: yet. Listed rather than silently tolerated: each one is a cell that will
+    #: print "not baked yet" no matter what a participant runs. Shrink this
+    #: list by writing the producer; never grow it to make a test pass.
+    KNOWN_UNPRODUCED = {
+        "nb4_multiturn",      # needs a multi-turn training run, not just sweeps
+        "nb5_art_eval",       # stage_art saves history but never scores it
+        "nb6_human_labels",   # the HITL agreement sample is not collected
+        "nb7_serving",        # serving tier is chosen live, never recorded
+        "nb7_served_eval",
+        "nb8_pareto",         # stage_deploy writes nb7_pareto, not this one
+    }
+
     problems = []
     for mod_name, key, cmd in _baked_calls():
         if "--stage" not in cmd:
@@ -133,7 +158,16 @@ def test_every_baked_key_has_a_producer():
         unknown = [s for s in named.split(",") if s not in stages]
         if unknown:
             problems.append(f"{mod_name}: {key!r} -> unknown stage(s) {unknown}")
+        elif not has_producer(key) and key not in KNOWN_UNPRODUCED:
+            problems.append(
+                f"{mod_name}: {key!r} -> `{cmd}` runs, but no save_result() in "
+                f"bake_all.py ever writes {key!r}. Write the producer, or add "
+                f"the key to KNOWN_UNPRODUCED with a reason.")
     assert not problems, "\n".join(problems)
+
+    stale = sorted(k for k in KNOWN_UNPRODUCED if has_producer(k))
+    assert not stale, (
+        f"these now have producers -- remove them from KNOWN_UNPRODUCED: {stale}")
 
 
 def test_referenced_scripts_exist():

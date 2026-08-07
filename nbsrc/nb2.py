@@ -182,7 +182,9 @@ simplicity prior that measurably reduces rambling and incidentally makes the
 model cheaper to serve.
 """),
     code(r"""
-from llm_utils.datasets import star_sample, star_yield, dedup_sft, star_path
+import os
+from llm_utils.datasets import (star_sample, star_yield, dedup_sft, star_path,
+                                read_records, write_records)
 from llm_utils.local_llm import LocalLM
 from llm_utils.config import base_model_4bit
 
@@ -192,16 +194,20 @@ if CAP["gpu"]:
     demo = star_sample(lm.as_policy(), train[:60], k=4, temperature=0.8)
     print(f"\ndemo on 60 tasks: kept {len(demo)}")
     print("yield by level:", star_yield(demo, train[:60]))
-    import os
-    records = (__import__("llm_utils.datasets", fromlist=["read_records"])
-               .read_records(star_path())) if os.path.exists(star_path()) else demo
+    records = read_records(star_path()) if os.path.exists(star_path()) else demo
+    # PERSIST. Without this the demo pairs live only in this kernel, and
+    # `bake_all.py --stage sft` dies on a missing data/star_sft.jsonl -- which
+    # is exactly what the ablation cell below tells you to run.
+    if not os.path.exists(star_path()):
+        write_records(records, star_path())
+        print(f"wrote {len(records)} pairs -> {star_path()}")
 else:
-    from llm_utils.datasets import read_records
-    import os
     records = read_records(star_path()) if os.path.exists(star_path()) else []
     if not records:
-        baked("star_sft",
-                  "python scripts/bake_all.py --stage star")
+        # Keep the return value: `baked()` IS the replay path, and discarding it
+        # left `records` empty even when the artifact was present.
+        records = baked("star_sft",
+                  "python scripts/bake_all.py --stage star") or []
 
 if records:
     print(f"\nfull STaR set: {len(records)} pairs, "
