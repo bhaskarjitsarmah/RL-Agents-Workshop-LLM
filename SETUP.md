@@ -48,7 +48,7 @@ Open any notebook's Colab badge, then:
 You should see something like:
 
 ```
-GPU: Tesla T4  sm_75  14.7 GB  bf16=True  dtype=bfloat16
+GPU: Tesla T4  sm_75  14.56 GB  bf16=False  dtype=float16
 ```
 
 If it says `GPU: none`, you are on a CPU runtime — switch it. If Colab refuses
@@ -57,13 +57,13 @@ day in **replay mode**: every notebook renders every chart from the pre-baked
 runs that ship with the repo. You will read real curves; you just will not have
 produced them yourself.
 
-`bf16=True` on a T4 is expected, and is not a claim that Turing has bf16 tensor
-cores — it does not. Current PyTorch emulates bf16 there, and we take that deal
-deliberately: bf16 needs no `GradScaler`, and the scaler is what crashes with
-`_amp_foreach_non_finite_check_and_unscale_ not implemented for 'BFloat16'` the
-moment the model and the trainer disagree about dtype. The choice is made once,
-in `llm_utils/config.py:torch_dtype()`, and every training config reads that same
-flag — so never set `fp16=`/`bf16=` on a config by hand. See [COLAB.md](COLAB.md).
+`bf16=False` is expected and important — a T4 is Turing, so everything in this
+repo runs fp16. What matters is that the *model* and the *trainer* agree: fp16
+means Trainer installs a `GradScaler`, and a GradScaler handed bf16 gradients
+dies with `_amp_foreach_non_finite_check_and_unscale_ not implemented for
+'BFloat16'`. The decision is made once, in `llm_utils/config.py:torch_dtype()`,
+and every training config reads that same flag via `_precision_flags()` — so
+never set `fp16=`/`bf16=` on a config by hand. See [COLAB.md](COLAB.md).
 
 ## 4. Optional keys
 

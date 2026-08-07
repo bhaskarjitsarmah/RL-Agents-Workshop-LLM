@@ -9,7 +9,7 @@ every training config in this repo:
 
 | | consequence |
 |---|---|
-| **no native bfloat16** | current PyTorch emulates it, and we use it anyway — see below |
+| **no bfloat16** | `dtype=torch.float16`, and the trainer's `fp16=`/`bf16=` derived from the same flag — see below |
 | **no FlashAttention-2** | `attn_implementation="sdpa"`; FA2 needs sm_80+ |
 | **vLLM is unreliable** | `use_vllm=False` and `fast_inference=False` by default; NB0–NB4 run on plain HF `generate` and accept the 2–4× slowdown |
 
@@ -30,12 +30,15 @@ not implemented for 'BFloat16'
 
 Two things used to allow that mismatch, both now closed: the configs hardcoded
 `fp16=True`, and `from_pretrained(torch_dtype=...)` was **silently ignored** on
-transformers v5, which renamed the argument to `dtype=`. `_dtype_kwarg()` picks
-the right name per version, and `_assert_dtype()` fails at load time rather than
-mid-run.
+transformers v5 (5.5.0 on Colab as of Aug 2026), which renamed the argument to
+`dtype=` — so the model loaded at the checkpoint's bfloat16 no matter what was
+asked for. `_dtype_kwarg()` picks the right name per version, and
+`_assert_dtype()` fails at load time rather than mid-run.
 
-On a T4 you will see `bf16=True dtype=bfloat16`. Emulated bf16 is slower than
-native fp16, and we take that trade deliberately: bf16 needs no scaler at all.
+On a T4 you will see `bf16=False dtype=float16`. Note that `bf16` here comes from
+`torch.cuda.is_bf16_supported()`, whose answer for Turing has changed across
+torch releases — which is exactly why nothing else in the repo is allowed to
+form its own opinion about dtype.
 
 **fp16 + LoRA can also diverge into non-finite gradients**, silently — you get a
 flat loss curve rather than an error, which reads as "the model didn't learn".

@@ -151,6 +151,10 @@ def load_4bit_policy(model_id: str | None = None, r: int = 16,
                 use_gradient_checkpointing="unsloth" if gradient_checkpointing else False,
                 random_state=3407,
             )
+            # Same guard as the fallback path below: unsloth honours `dtype`,
+            # but it is one more component with its own opinion about Turing,
+            # and a disagreement here costs a whole training run.
+            _assert_dtype(model, dtype)
             print(f"[trainers] unsloth path, dtype={dtype}, model={mid}")
             _prep_tokenizer(tok)
             return model, tok

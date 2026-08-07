@@ -117,13 +117,14 @@ the session and run again.
 **Runtime → Run all.** The setup cell reports your GPU; a healthy run shows:
 
 ```
-GPU: Tesla T4  sm_75  14.7 GB  bf16=True  dtype=bfloat16
-versions: torch=...  transformers=...  trl=...  peft=...
+GPU: Tesla T4  sm_75  14.56 GB  bf16=False  dtype=float16
+versions: torch=2.11.0+cu128  transformers=5.5.0  trl=0.24.0  peft=0.19.1  unsloth=...
 keys present: WANDB_API_KEY
 ```
 
-`bf16=True` on a T4 is correct — leave it alone. Never set `fp16=` or `bf16=` on
-a training config by hand; the notebooks derive both from one place.
+`bf16=False` on a T4 is correct — it's a Turing card. Never set `fp16=` or
+`bf16=` on a training config by hand; the notebooks derive both from that one
+flag, and overriding it is what causes the `BFloat16` crash below.
 
 Read the markdown between the cells as they run — that's the workshop. No live
 training cell runs longer than ~25 minutes.
