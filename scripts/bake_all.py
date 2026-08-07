@@ -467,6 +467,22 @@ def stage_multiturn(force: bool) -> None:
     from llm_utils.local_llm import LocalLM
     from llm_utils.metrics import trajectory_efficiency
 
+    if not skip("nb4_multiturn", force):
+        # The curve NB4 plots. TRL cannot express this run -- see the header of
+        # llm_utils/multiturn.py -- so it uses our own trainer, the same one the
+        # notebook calls live.
+        from llm_utils.multiturn import train_multi_turn
+        from llm_utils.trainers import load_4bit_policy
+
+        m, t = load_4bit_policy()
+        hist = train_multi_turn(
+            m, t, read_jsonl(os.path.join(DATA, "tasks_train_gen.jsonl")),
+            val_tasks=read_jsonl(os.path.join(DATA, "tasks_val_gen.jsonl")),
+            steps=100, G=4, tasks_per_step=2, max_turns=4)
+        save_result("nb4_multiturn", hist)
+        del m
+        empty_cache()
+
     lm = LocalLM(base_model_4bit(), adapter=adapter_repo("grpo"))
     policy = lm.as_policy()
     val = read_jsonl(os.path.join(DATA, "tasks_val_gen.jsonl"))[:80]

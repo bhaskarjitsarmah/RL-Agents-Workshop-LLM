@@ -33,7 +33,15 @@ load_dotenv()
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 DATA_DIR = os.path.join(REPO_ROOT, "data")
-RESULTS_DIR = os.path.join(DATA_DIR, "results")
+
+# Where save_result()/load_result() live. Overridable because on Colab EVERY
+# notebook is its own VM: NB3 trains the GRPO curve into its own /content and
+# NB5, running in a different runtime, cannot see it -- so NB5's "TRL vs ART"
+# comparison can never render, no matter what NB3 did. Point this at Drive
+# (RESULTS_DIR=/content/drive/MyDrive/rl-workshop-results) and the results
+# outlive the VM and are shared across notebooks.
+RESULTS_DIR = os.environ.get(
+    "RESULTS_DIR", os.path.join(DATA_DIR, "results"))
 ADAPTER_DIR = os.path.join(REPO_ROOT, "adapters")
 
 # --- Identity -------------------------------------------------------------
@@ -323,18 +331,30 @@ def save_result(key: str, obj) -> str:
     return path
 
 
+def _search_paths(key: str) -> list[str]:
+    """Where a result may live: the write location first, then the repo's own.
+
+    With RESULTS_DIR pointed at Drive, the pre-baked files that SHIP with the
+    repo would otherwise become invisible -- you would gain cross-notebook
+    persistence and lose every artifact the repo already provides.
+    """
+    default = os.path.join(DATA_DIR, "results")
+    dirs = [RESULTS_DIR] + ([default] if default != RESULTS_DIR else [])
+    return [os.path.join(d, f"{key}.json") for d in dirs]
+
+
 def load_result(key: str, default=None):
     """Load a pre-baked result. Returns `default` if it hasn't been baked yet.
 
     Callers should treat a None return as "this chart can't be drawn here" and
     say so in the output -- never silently plot an empty series.
     """
-    path = result_path(key)
-    if not os.path.exists(path):
-        return default
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    for path in _search_paths(key):
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+    return default
 
 
 def have_result(key: str) -> bool:
-    return os.path.exists(result_path(key))
+    return any(os.path.exists(p) for p in _search_paths(key))

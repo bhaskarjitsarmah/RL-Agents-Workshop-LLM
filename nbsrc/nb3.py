@@ -181,6 +181,7 @@ if CAP["gpu"]:
     trainer.train()
     vram_budget("after train")
     grpo_hist = trainer.state.log_history
+    save_result("nb3_grpo_history", grpo_hist)   # NB5 reads this back
 else:
     grpo_hist = baked("nb3_grpo_history",
                   "python scripts/bake_all.py --stage grpo")

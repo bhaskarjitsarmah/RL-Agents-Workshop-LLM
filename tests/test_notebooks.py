@@ -141,7 +141,6 @@ def test_every_baked_key_has_a_producer():
     #: print "not baked yet" no matter what a participant runs. Shrink this
     #: list by writing the producer; never grow it to make a test pass.
     KNOWN_UNPRODUCED = {
-        "nb4_multiturn",      # needs a multi-turn training run, not just sweeps
         "nb5_art_eval",       # stage_art saves history but never scores it
         "nb6_human_labels",   # the HITL agreement sample is not collected
         "nb7_serving",        # serving tier is chosen live, never recorded

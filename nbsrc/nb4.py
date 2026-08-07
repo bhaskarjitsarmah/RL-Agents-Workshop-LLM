@@ -125,13 +125,41 @@ print("the episode did.")
 ## 4. Train it
 """),
     code(r"""
-# NOTE: this curve is REPLAY-ONLY, on every machine including a GPU one.
-# Multi-turn RL needs a trainer that credits a reward across a whole tool
-# trajectory; this repo ships the rollout machinery (`rollout_multi_turn`,
-# `batch_rollout`) and the reward, but not that trainer. The sweeps below are
-# live and are where the multi-turn lesson actually lands -- they measure the
-# behaviour this curve would be optimising.
-mt_hist = baked("nb4_multiturn",
+from llm_utils.gen_tasks import read_jsonl
+
+# TRL cannot express this run. Its trainers take prompt/completion rows and
+# generate ONE completion per prompt -- there is no tool loop, no environment
+# turn, and no way to hand one episode-level reward back across several
+# assistant turns. So `llm_utils/multiturn.py` does exactly the three things
+# this notebook just walked through: roll out episodes, score each against its
+# group mean, and put the gradient ONLY on assistant tokens.
+MT_STEPS = 15          # a demonstration you can watch; the pre-baked run is 100
+
+mt_hist = load_result("nb4_multiturn")
+if mt_hist is None and CAP["gpu"]:
+    from llm_utils.config import base_model_4bit, empty_cache
+    from llm_utils.multiturn import train_multi_turn
+    from llm_utils.trainers import load_4bit_policy
+
+    print("Live multi-turn training is ~3x the generation cost per step:")
+    print(f"{MT_STEPS} steps x 2 tasks x G=4 episodes, each up to 4 turns.")
+    print("The result caches, so this happens once.\n")
+    try:
+        mt_model, mt_tok = load_4bit_policy()
+        mt_hist = train_multi_turn(
+            mt_model, mt_tok,
+            read_jsonl("data/tasks_train_gen.jsonl"),
+            val_tasks=read_jsonl("data/tasks_val_gen.jsonl"),
+            steps=MT_STEPS, G=4, tasks_per_step=2, max_turns=4)
+        save_result("nb4_multiturn", mt_hist)
+        del mt_model; empty_cache()
+    except Exception as e:      # must not kill Run-all
+        mt_hist = None
+        print(f"\nMulti-turn training did not finish: {type(e).__name__}: {e}")
+        print("Lower MT_STEPS and re-run, or read on -- nothing below depends "
+              "on this cell.")
+elif mt_hist is None:
+    mt_hist = baked("nb4_multiturn",
                   "python scripts/bake_all.py --stage multiturn")
 
 if mt_hist:
@@ -173,7 +201,41 @@ for the wrong thing.
 Hold that thought - NB6 is this same lesson with the safety rails off.
 """),
     code(r"""
-sweep = baked("nb4_penalty_sweep",
+# The sweep has to TRAIN under each penalty. `weights` changes how the reward
+# scores a trajectory, not how the policy produces one -- so measuring three
+# penalties against one fixed policy gives three identical rollouts and three
+# identical bars. That is the trap this cell used to fall into.
+PENALTY_STEPS = 6      # per arm. Three short runs; raise for a sharper effect.
+
+sweep = load_result("nb4_penalty_sweep")
+if sweep is None and CAP["gpu"]:
+    from llm_utils.config import empty_cache
+    from llm_utils.multiturn import evaluate_turns, policy_from_model, train_multi_turn
+    from llm_utils.trainers import load_4bit_policy
+
+    print(f"Training {PENALTY_STEPS} steps under each of three penalties.")
+    try:
+        tr_tasks = read_jsonl("data/tasks_train_gen.jsonl")
+        va_tasks = read_jsonl("data/tasks_val_gen.jsonl")[:24]
+        sweep = {}
+        for pen in (0.0, 0.05, 0.30):
+            m_p, t_p = load_4bit_policy()
+            train_multi_turn(m_p, t_p, tr_tasks, steps=PENALTY_STEPS, G=4,
+                             tasks_per_step=2, max_turns=4,
+                             weights={"efficiency": pen}, verbose=False)
+            got = evaluate_turns(policy_from_model(m_p, t_p), va_tasks)
+            sweep[str(pen)] = {"mean_turns": got["mean_turns"],
+                               "accuracy": got["accuracy"],
+                               "mean_tool_calls": got["mean_turns"] - 1}
+            print(f"  penalty={pen}: turns {got['mean_turns']:.2f}  "
+                  f"acc {got['accuracy']:.3f}")
+            del m_p; empty_cache()
+        save_result("nb4_penalty_sweep", sweep)
+    except Exception as e:
+        sweep = None
+        print(f"Penalty sweep did not finish: {type(e).__name__}: {e}")
+elif sweep is None:
+    sweep = baked("nb4_penalty_sweep",
                   "python scripts/bake_all.py --stage multiturn")
 if sweep:
     fig, ax = plt.subplots(1, 2, figsize=(11, 3.8))
@@ -186,7 +248,35 @@ if sweep:
     plt.tight_layout(); plt.show()
 """),
     code(r"""
-budget = baked("nb4_turn_budget",
+# Live: unlike the penalty sweep, `max_turns` genuinely changes the rollout --
+# the policy really does get fewer chances to look before it answers. No
+# training needed, so this is a measurement you make on your own GPU.
+BUDGET_TASKS = 24
+
+budget = load_result("nb4_turn_budget")
+if budget is None and CAP["gpu"]:
+    from llm_utils.config import base_model_4bit, empty_cache
+    from llm_utils.local_llm import LocalLM
+    from llm_utils.multiturn import policy_from_model
+
+    try:
+        val = read_jsonl("data/tasks_val_gen.jsonl")[:BUDGET_TASKS]
+        lm_b = LocalLM(base_model_4bit())
+        pol_b = lm_b.as_policy()
+        budget = {}
+        for mt in (1, 2, 3, 4):
+            trajs = [rollout_multi_turn(pol_b, t, max_turns=mt, temperature=0.0)
+                     for t in val]
+            k = sum(1 for tr in trajs if tr.correct)
+            budget[str(mt)] = [k, len(trajs)]
+            print(f"  max_turns={mt}: {k}/{len(trajs)}")
+        save_result("nb4_turn_budget", budget)
+        lm_b.unload(); empty_cache()
+    except Exception as e:
+        budget = None
+        print(f"Turn-budget sweep did not finish: {type(e).__name__}: {e}")
+elif budget is None:
+    budget = baked("nb4_turn_budget",
                   "python scripts/bake_all.py --stage multiturn")
 if budget:
     from llm_utils.plotting import bar_accuracy

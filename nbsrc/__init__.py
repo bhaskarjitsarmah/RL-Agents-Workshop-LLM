@@ -175,7 +175,25 @@ else:
         os.chdir("..")
 sys.path.insert(0, os.getcwd())
 
-from llm_utils import build_db, preflight, capability, load_result, report_number
+# Results that outlive the VM. Every Colab notebook is a SEPARATE runtime, so
+# NB3 trains the GRPO curve into its own /content and NB5 -- a different VM --
+# cannot see it. Anything one notebook computes for another has to land
+# somewhere shared, and Drive is the only such place on free Colab.
+# Set RESULTS_DIR before importing llm_utils: it is read at import time.
+if IN_COLAB and os.environ.get("USE_DRIVE", "1") != "0":
+    try:
+        from google.colab import drive
+        drive.mount("/content/drive", force_remount=False)
+        _rd = "/content/drive/MyDrive/rl-workshop-results"
+        os.makedirs(_rd, exist_ok=True)
+        os.environ["RESULTS_DIR"] = _rd
+        print(f"Results -> {{_rd}} (shared across notebooks, survives restarts)")
+    except Exception as _e:
+        print(f"Drive not mounted ({{_e}}). Results stay in this VM only, so a")
+        print("later notebook will not see what this one computes. Not fatal.")
+
+from llm_utils import (build_db, preflight, capability, load_result,
+                       report_number, save_result)
 from llm_utils.plotting import use_house_style
 import matplotlib.pyplot as plt
 

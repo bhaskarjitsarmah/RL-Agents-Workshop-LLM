@@ -86,6 +86,7 @@ if ART_OK and CAP["gpu"]:
     out = await run_art_training(train, steps=20, groups_per_step=8,
                                  rollouts_per_group=8)
     art_hist = out["history"]
+    save_result("nb5_art_history", art_hist)
 else:
     art_hist = baked("nb5_art_history",
                   "python scripts/bake_all.py --stage art")

@@ -258,6 +258,7 @@ if CAP["gpu"] and records:
     trainer.train()
     vram_budget("after train")
     sft_hist = trainer.state.log_history
+    save_result("nb2_sft", sft_hist)   # so a re-run replays instead of retraining
 else:
     sft_hist = baked("nb2_sft",
                      "python scripts/bake_all.py --stage star,sft")
