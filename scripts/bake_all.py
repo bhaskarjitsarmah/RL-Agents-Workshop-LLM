@@ -161,18 +161,23 @@ def stage_sft(force: bool) -> None:
     from llm_utils.trainers import (load_4bit_policy, non_finite_loss_callback,
                                     push_adapter, t4_sft_config)
 
-    if skip("nb2_sft", force):
-        return
-    model, tok = load_4bit_policy()
-    ds = to_sft_dataset(read_records(star_path()))
-    out = os.path.join(ADAPTER_DIR, "star-sft")
-    tr = SFTTrainer(model=model, train_dataset=ds, args=t4_sft_config(out),
-                    callbacks=[non_finite_loss_callback()])
-    tr.train()
-    tr.save_model(out)
-    save_result("nb2_sft", tr.state.log_history)
-    if os.environ.get("HF_TOKEN"):
-        push_adapter(out, adapter_repo("star-sft"))
+    # Two INDEPENDENT artifacts. An early `return` on nb2_sft would also skip
+    # the ablations, so re-running the stage after a partial bake could never
+    # fill the gap -- each one guards itself, as in stage_multiturn.
+    if not skip("nb2_sft", force):
+        model, tok = load_4bit_policy()
+        ds = to_sft_dataset(read_records(star_path()))
+        out = os.path.join(ADAPTER_DIR, "star-sft")
+        tr = SFTTrainer(model=model, train_dataset=ds, args=t4_sft_config(out),
+                        callbacks=[non_finite_loss_callback()])
+        tr.train()
+        tr.save_model(out)
+        save_result("nb2_sft", tr.state.log_history)
+        if os.environ.get("HF_TOKEN"):
+            push_adapter(out, adapter_repo("star-sft"))
+        del model, tr
+        empty_cache()
+
     _sft_ablations(force)
 
 
