@@ -380,10 +380,50 @@ def stage_pathologies(force: bool) -> None:
             log(f"  {name} diverged hard: {e}")
             hist = getattr(locals().get("tr", None), "state", None)
             hist = hist.log_history if hist else [{"step": 0, "note": str(e)}]
+        verdict = _pathology_held(name, hist)
         save_result(f"pathologies/{name}", hist)
-        log(f"  {name}: {len(hist)} logged steps")
+        log(f"  {name}: {len(hist)} logged steps -- {verdict}")
         del model
         empty_cache()   # four models in one loop; run 3 would OOM otherwise
+
+
+def _pathology_held(name: str, hist: list[dict]) -> str:
+    """Did this run actually fail the way its label says?
+
+    Without this the stage is a labelling exercise: train something, call it
+    `kl_blowup`, ship it. A participant asked to diagnose a curve from its shape
+    must be looking at a curve that really has that shape, or the exercise
+    teaches a wrong association. Reported rather than raised -- a pathology that
+    did not bite is information, and the recipe needs tuning, not the run
+    discarding.
+    """
+    def series(k):
+        return [h[k] for h in hist if isinstance(h.get(k), (int, float))]
+
+    kl, std = series("kl"), series("reward_std")
+    length = series("completions/mean_length")
+    reward = series("reward")
+    checks = {
+        # KL should end far above where it started
+        "kl_blowup": (lambda: len(kl) > 4 and max(kl[-3:]) > 10 * (kl[0] or 1e-9),
+                      "KL never ran away -- raise learning_rate or lower beta"),
+        # nearly every group unanimous -> no gradient
+        "zero_advantage": (lambda: std and sum(s < 1e-6 for s in std) > 0.7 * len(std),
+                           "groups still had spread -- lower temperature further"),
+        # completions pinned at the cap
+        "length_collapse": (lambda: length and max(length[-3:]) <= 26,
+                            "completions did not collapse to the cap"),
+        # reward ends well below its own peak and does not recover
+        "reward_collapse": (lambda: len(reward) > 4
+                            and reward[-1] < 0.5 * max(reward),
+                            "reward recovered -- raise learning_rate"),
+    }
+    check, why = checks[name]
+    try:
+        ok = bool(check())
+    except Exception:  # noqa: BLE001 - a malformed history is itself a failure
+        ok = False
+    return "FAILED AS INTENDED (usable)" if ok else f"*** DID NOT REPRODUCE: {why} ***"
 
 
 def stage_hacked(force: bool) -> None:
