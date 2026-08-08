@@ -350,13 +350,19 @@ def stage_pathologies(force: bool) -> None:
     from llm_utils.rewards import make_trl_reward_fns
     from llm_utils.trainers import load_4bit_policy, t4_grpo_config
 
+    # 30 steps, not 60. Every one of these fails in its first third -- a
+    # temperature of 0.01 has zero spread from step 1, a 24-token cap truncates
+    # immediately -- so the extra 30 steps only extend a curve whose shape is
+    # already unmistakable, at ~14 GPU-minutes each. Raise BAKE_PATHOLOGY_STEPS
+    # if a curve does not read clearly.
+    n = int(os.environ.get("BAKE_PATHOLOGY_STEPS", "30"))
     recipes = {
-        "kl_blowup":      dict(beta=0.0, learning_rate=5e-4, max_steps=60),
-        "length_collapse": dict(max_completion_length=24, beta=0.0, max_steps=60),
+        "kl_blowup":      dict(beta=0.0, learning_rate=5e-4, max_steps=n),
+        "length_collapse": dict(max_completion_length=24, beta=0.0, max_steps=n),
         "zero_advantage": dict(temperature=0.01, num_generations=4,
-                               per_device_train_batch_size=4, max_steps=60),
+                               per_device_train_batch_size=4, max_steps=n),
         "reward_collapse": dict(learning_rate=3e-3, max_grad_norm=100.0,
-                                max_steps=60),
+                                max_steps=n),
     }
     train = read_jsonl(os.path.join(DATA, "tasks_train_gen.jsonl"))[:200]
     ds = to_grpo_dataset(train)
@@ -376,6 +382,8 @@ def stage_pathologies(force: bool) -> None:
             hist = hist.log_history if hist else [{"step": 0, "note": str(e)}]
         save_result(f"pathologies/{name}", hist)
         log(f"  {name}: {len(hist)} logged steps")
+        del model
+        empty_cache()   # four models in one loop; run 3 would OOM otherwise
 
 
 def stage_hacked(force: bool) -> None:

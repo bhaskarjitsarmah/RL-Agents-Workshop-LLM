@@ -324,8 +324,11 @@ def result_path(key: str) -> str:
 
 def save_result(key: str, obj) -> str:
     """Persist a training history / eval result so it can be replayed offline."""
-    os.makedirs(RESULTS_DIR, exist_ok=True)
     path = result_path(key)
+    # dirname, not RESULTS_DIR: nested keys like "pathologies/kl_blowup" need
+    # their subdirectory too, and only finding that out AFTER the run that
+    # produced the artifact is the most expensive way to learn it.
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, default=str)
     return path
