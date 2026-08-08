@@ -167,7 +167,36 @@ if lat:
     print("This is the slide that decides the project, and it is one division.")
 """),
     code(r"""
-pareto_pts = baked("nb7_pareto",
+# Live: both axes are already measured above -- cost from the throughput this
+# GPU just showed, accuracy from the merge check. No reason to replay a file.
+pareto_pts = load_result("nb7_pareto")
+if pareto_pts is None and lat:
+    try:
+        _mc = load_result("nb7_merge_check") or {}
+        _h2h = load_result("nb8_headtohead") or {}
+        pareto_pts = []
+        if _mc.get("adapter"):
+            pareto_pts.append({"label": "Qwen GRPO (T4)",
+                               "cost_per_1k": round(self_cost_1k, 4),
+                               "accuracy": _mc["adapter"][0] / _mc["adapter"][1]})
+        # Only if this session actually measured gpt-4o-mini. Defaulting to
+        # repo 1's published 0.75 would put an unmeasured number on a chart
+        # with a real one, and nothing on the axis would say which was which.
+        _api = _h2h.get("A gpt-4o-mini")
+        if _api:
+            pareto_pts.append({"label": "gpt-4o-mini",
+                               "cost_per_1k": round(api_cost_1k, 4),
+                               "accuracy": _api["accuracy"]})
+        else:
+            print("  gpt-4o-mini not measured in this session -- plotting the "
+                  "self-hosted point only. Run NB8's head-to-head with an "
+                  "OpenAI key for the second point.")
+        save_result("nb7_pareto", pareto_pts)
+    except Exception as e:
+        pareto_pts = None
+        print(f"Pareto did not finish: {type(e).__name__}: {e}")
+elif pareto_pts is None:
+    pareto_pts = baked("nb7_pareto",
                   "python scripts/bake_all.py --stage deploy")
 if pareto_pts:
     from llm_utils.plotting import pareto

@@ -121,7 +121,28 @@ claims, use val-200 and test_ext-169, where the intervals are ~±7pp instead of
 ~±20pp.
 """),
     code(r"""
-big = baked("nb8_bigsets",
+# Live: the same three checkpoints from the head-to-head, scored on the sets
+# that actually have power. test-16 exists for comparability with repo 1; these
+# are what you would quote.
+big = load_result("nb8_bigsets")
+if big is None and CAP["gpu"]:
+    from llm_utils.evaluate_batch import evaluate_jsonl, make_batch_agent
+    try:
+        big = {"val": {}, "test_ext": {}}
+        for _lbl, _lm in (("C Qwen zero-shot", lm_base), ("D Qwen SFT", lm_sft),
+                          ("E Qwen SFT+GRPO", lm_grpo)):
+            _ba = make_batch_agent(_lm)
+            for _sp, _fn in (("val", "tasks_val_gen.jsonl"),
+                             ("test_ext", "tasks_test_ext_gen.jsonl")):
+                _r = evaluate_jsonl(_ba, f"data/{_fn}")
+                big[_sp][_lbl] = [sum(x["correct"] for x in _r["records"]), _r["n"]]
+                print(f"  {_lbl} {_sp}: {big[_sp][_lbl]}")
+        save_result("nb8_bigsets", big)
+    except Exception as e:
+        big = None
+        print(f"Big-set eval did not finish: {type(e).__name__}: {e}")
+elif big is None:
+    big = baked("nb8_bigsets",
                   "python scripts/bake_all.py --stage bigsets")
 if big:
     for split in ("val", "test_ext"):
@@ -130,7 +151,22 @@ if big:
             print("  " + report_number(tuple(v), k))
 """),
     code(r"""
-seeds = baked("nb8_seeds",
+# Live: the same checkpoint, five decoding seeds. If this spread is comparable
+# to the effect you are claiming, the effect is decoding luck.
+seeds = load_result("nb8_seeds")
+if seeds is None and CAP["gpu"]:
+    from llm_utils.evaluate_batch import evaluate_seeds
+    try:
+        _res = evaluate_seeds(lambda _s: make_local_agent(lm_grpo), split="test",
+                              seeds=(0, 1, 2, 3, 4), temperature=0.7)
+        seeds = {"decoding": {"E Qwen SFT+GRPO": _res["accuracies"]}, "training": {}}
+        save_result("nb8_seeds", seeds)
+        print(f"  decoding-seed spread: {_res['mean']:.3f} +- {_res['std']:.3f}")
+    except Exception as e:
+        seeds = None
+        print(f"Seed sweep did not finish: {type(e).__name__}: {e}")
+elif seeds is None:
+    seeds = baked("nb8_seeds",
                   "python scripts/bake_all.py --stage bigsets")
 if seeds:
     from llm_utils.metrics import format_seed_summary, seed_summary
@@ -172,7 +208,50 @@ if results and all(isinstance(v, dict) and "records" in v for v in results.value
 ## 6. Cost, latency, accuracy - all three axes
 """),
     code(r"""
-pts = baked("nb8_pareto",
+# Live. Nothing in bake_all has ever written this key -- the deploy stage
+# writes nb7_pareto, a different one -- so the cell could only ever print
+# "not baked yet". Built here from the accuracies measured above and a
+# throughput measured on this GPU, which is the honest source for both axes.
+pts = load_result("nb8_pareto")
+if pts is None and CAP["gpu"] and results:
+    import time as _t
+    from llm_utils import load_tasks
+    from llm_utils.llm import GPU_HOURLY_USD, PRICING_PER_1M
+    try:
+        _lat = load_result("nb7_latency") or {}
+        _tp = _lat.get("throughput")
+        if _tp:                       # NB7 already measured it (shared results)
+            _qps = max(float(v) for v in _tp.values())
+            _in = _lat.get("mean_prompt_tokens", 700)
+            _out = _lat.get("mean_completion_tokens", 60)
+        else:                         # measure a small batch here instead
+            _probe = [t["question"] for t in load_tasks()[:8]]
+            _msgs = [[{"role": "user", "content": q}] for q in _probe]
+            _t0 = _t.time()
+            lm_grpo.generate_batch(_msgs, n=1, max_new_tokens=128)
+            _qps = len(_msgs) / max(_t.time() - _t0, 1e-6)
+            _st = lm_grpo.stats
+            _in = _st["prompt_tokens"] // max(_st["calls"], 1)
+            _out = _st["completion_tokens"] // max(_st["calls"], 1)
+        _p = PRICING_PER_1M["gpt-4o-mini"]
+        _api_1k = (_in * _p["in"] + _out * _p["out"]) / 1e6 * 1000
+        _self_1k = GPU_HOURLY_USD["T4"] / (_qps * 3600) * 1000
+        pts = []
+        for _lbl, _cost in (("gpt-4o-mini", _api_1k),
+                            ("Qwen GRPO (T4)", _self_1k)):
+            _r = results.get("A gpt-4o-mini" if "gpt" in _lbl
+                             else "E Qwen SFT+GRPO")
+            if _r:
+                pts.append({"label": _lbl, "cost_per_1k": round(_cost, 4),
+                            "accuracy": _r["accuracy"]})
+        save_result("nb8_pareto", pts)
+        print(f"  {_qps:.2f} q/s -> ${_self_1k:.3f}/1k self-hosted, "
+              f"${_api_1k:.3f}/1k API")
+    except Exception as e:
+        pts = None
+        print(f"Pareto did not finish: {type(e).__name__}: {e}")
+elif pts is None:
+    pts = baked("nb8_pareto",
                   "python scripts/bake_all.py --stage bigsets")
 if pts:
     from llm_utils.plotting import pareto

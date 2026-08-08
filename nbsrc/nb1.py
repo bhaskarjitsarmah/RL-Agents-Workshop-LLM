@@ -149,6 +149,7 @@ if CAP["gpu"]:
     groups = [rollout_group(policy, t, G=8, temperature=0.9) for t in probe]
     rewards = [[tr.reward for tr in g] for g in groups]
     summaries = [summarize_group(g) for g in groups]
+    save_result("nb1_groups", {"rewards": rewards, "summaries": summaries})
 else:
     d = baked("nb1_groups",
                   "python scripts/bake_all.py --stage groups")

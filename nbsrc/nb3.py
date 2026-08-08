@@ -182,6 +182,7 @@ if CAP["gpu"]:
     vram_budget("after train")
     grpo_hist = trainer.state.log_history
     save_result("nb3_grpo_history", grpo_hist)   # NB5 reads this back
+    trainer.save_model("out/grpo")   # only checkpoints existed; nothing final
 else:
     grpo_hist = baked("nb3_grpo_history",
                   "python scripts/bake_all.py --stage grpo")
@@ -293,7 +294,39 @@ straight from repo 1's validation gate:
 ## Where we got to
 """),
     code(r"""
-res = baked("nb3_results",
+# Live: score what we just trained. The SFT row needs NB2's adapter, which
+# lives in a different Colab VM -- included only if it resolves, rather than
+# failing the whole comparison over a row we cannot get.
+res = load_result("nb3_results")
+if res is None and CAP["gpu"] and grpo_hist:
+    from llm_utils import evaluate
+    from llm_utils.config import adapter_repo, base_model_4bit, empty_cache
+    from llm_utils.evaluate_batch import evaluate_jsonl, make_batch_agent
+    from llm_utils.local_llm import LocalLM, make_local_agent
+    try:
+        res = {"test16": {}, "val": {}, "test_ext": {}}
+        for _nm, _ad in (("base", None), ("star-sft", adapter_repo("star-sft")),
+                         ("grpo", "out/grpo")):
+            try:
+                _lm = LocalLM(base_model_4bit(), adapter=_ad)
+            except Exception as _e:
+                print(f"  {_nm}: unavailable ({_e}) -- skipping this row")
+                continue
+            _r = evaluate(make_local_agent(_lm), split="test")
+            res["test16"][_nm] = [sum(x["correct"] for x in _r["records"]), _r["n"]]
+            _ba = make_batch_agent(_lm)
+            for _sp, _fn in (("val", "tasks_val_gen.jsonl"),
+                             ("test_ext", "tasks_test_ext_gen.jsonl")):
+                _rb = evaluate_jsonl(_ba, f"data/{_fn}")
+                res[_sp][_nm] = [sum(x["correct"] for x in _rb["records"]), _rb["n"]]
+            print(f"  {_nm}: test16 {res['test16'][_nm]}")
+            _lm.unload(); empty_cache()
+        save_result("nb3_results", res)
+    except Exception as e:
+        res = None
+        print(f"Checkpoint eval did not finish: {type(e).__name__}: {e}")
+elif res is None:
+    res = baked("nb3_results",
                   "python scripts/bake_all.py --stage grpo")
 if res:
     from llm_utils.plotting import bar_accuracy
