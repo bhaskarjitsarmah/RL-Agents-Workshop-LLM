@@ -203,7 +203,19 @@ async def run_art_training(tasks: list[dict], project: str = "rl-weights-worksho
     if cls is None:
         raise RuntimeError("ART is installed but LocalBackend is not importable "
                            "from art, art.local or art.local.backend.")
-    backend = cls()
+    try:
+        backend = cls()
+    except ModuleNotFoundError as e:
+        # ART's local backend loads per-architecture handlers that import
+        # megatron.core. Megatron targets multi-GPU A100-class training and is
+        # not practically installable on a free T4, so this is a real capability
+        # limit rather than a misconfiguration -- say so plainly instead of
+        # surfacing an import error from a file nobody has heard of.
+        raise RuntimeError(
+            f"ART's LocalBackend needs {e.name!r}, which this runtime does not "
+            f"have. Local ART training expects a megatron/vLLM stack that a free "
+            f"T4 cannot provide. NB5 replays a pre-baked run instead; the code "
+            f"above is what you would run on suitable hardware.") from e
     model = art.TrainableModel(
         name=model_name, project=project,
         base_model=base_model_id or base_model(),

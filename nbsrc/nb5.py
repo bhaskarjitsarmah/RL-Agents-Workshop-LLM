@@ -83,10 +83,19 @@ art_hist = None
 
 if ART_OK and CAP["gpu"]:
     from llm_utils.art_bridge import run_art_training
-    out = await run_art_training(train, steps=20, groups_per_step=8,
-                                 rollouts_per_group=8)
-    art_hist = out["history"]
-    save_result("nb5_art_history", art_hist)
+    try:
+        out = await run_art_training(train, steps=20, groups_per_step=8,
+                                     rollouts_per_group=8)
+        art_hist = out["history"]
+        save_result("nb5_art_history", art_hist)
+    except Exception as e:
+        # ART imports cleanly and still cannot train here: its local backend
+        # pulls in megatron/vLLM, which a Turing T4 does not have. Reaching this
+        # line is the finding, not an accident -- so it must not take the rest
+        # of the notebook down with it.
+        print(f"{type(e).__name__}: {e}\n")
+        art_hist = baked("nb5_art_history",
+                  "python scripts/bake_all.py --stage art")
 else:
     art_hist = baked("nb5_art_history",
                   "python scripts/bake_all.py --stage art")
