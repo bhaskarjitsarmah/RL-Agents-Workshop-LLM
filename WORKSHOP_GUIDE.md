@@ -1,5 +1,7 @@
 # Workshop Runbook — Run This on a Free T4 (Colab or Kaggle)
 
+NB0 measures the gap, NB1–NB3 close it by moving weights, NB4–NB5 extend it to tool loops, NB6 shows how it goes wrong, NB7–NB8 ship it.
+
 No-nonsense, copy-paste setup for **Self-Improving Agents by Optimizing the
 Weights**. Follow it top to bottom. It works on a free Google Colab T4 and on a
 free Kaggle T4 — pick **one** track below.

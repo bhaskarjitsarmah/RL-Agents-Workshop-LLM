@@ -74,9 +74,22 @@ def base_model_4bit(size: str | None = None) -> str:
 
 
 def adapter_repo(tag: str, size: str | None = None) -> str:
-    """Hub id for a pre-baked adapter, e.g. adapter_repo("grpo") ->
-    'bhaskarjitsarmah/qwen25c-1.5b-sql-grpo'."""
+    """Where to load a trained adapter from: this machine first, the Hub second.
+
+    Returns a local directory when one exists, otherwise the Hub id
+    (e.g. 'bhaskarjitsarmah/qwen25c-1.5b-sql-grpo').
+
+    The Hub repos are not published. Returning the id unconditionally meant
+    every notebook that scores a checkpoint -- NB6's robustness suite, NB7's
+    merge check, NB8's head-to-head -- died on a 401 from huggingface.co,
+    including on a machine that had just trained the very adapter it was asking
+    for. NB3 writes out/grpo and NB4 writes adapters/multiturn; those should be
+    found before the network is consulted.
+    """
     s = (size or MODEL_SIZE).lower()
+    for d in (os.path.join(ADAPTER_DIR, tag), os.path.join("out", tag)):
+        if os.path.exists(os.path.join(d, "adapter_config.json")):
+            return d
     return f"{HF_NAMESPACE}/qwen25c-{s}-sql-{tag}"
 
 

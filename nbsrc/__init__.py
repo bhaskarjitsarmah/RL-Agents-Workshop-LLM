@@ -85,7 +85,13 @@ def SETUP_CELL(needs_gpu: bool = False, extra_keys: tuple = (),
     """
     keys = ", ".join(repr(k) for k in extra_keys)
     wandb_note = '''
-if not CAP["wandb"]:
+if CAP["wandb"]:
+    # A previous execution may have selected offline replay before the key was
+    # added to Colab Secrets. Serverless ART cannot operate offline.
+    if IN_COLAB and os.environ.get("WANDB_MODE") == "offline":
+        os.environ["WANDB_MODE"] = "online"
+    os.environ.setdefault("WANDB_MODE", "online")
+else:
     os.environ.setdefault("WANDB_MODE", "offline")
     print()
     print("No WANDB_API_KEY -> W&B set to offline mode.")
@@ -141,9 +147,12 @@ if IN_COLAB:
         print("*** CORE INSTALL FAILED -- scroll up for the uv error. ***")
         raise SystemExit("core install failed -- see WORKSHOP_GUIDE.md")
 
-    # NB5's openpipe-art, best-effort: it can fail to resolve, and NB5 falls back
-    # to a pre-baked run if it is absent. A failure here must not break the core.
-    _uv("openpipe-art>=0.4.0")
+    # NB5's ART client, best-effort. Colab uses ServerlessBackend, so installing
+    # the [backend]/[megatron] extras here is both unnecessary and harmful: they
+    # replace Colab's CUDA-matched torch. Pin the API family the bridge targets.
+    # A resolve failure must not break the core; NB5 then uses its replay path.
+    if _uv("openpipe-art>=0.5,<0.6") != 0:
+        print("openpipe-art 0.5.x did not install -- NB5 will use replay mode.")
 
     # Unsloth: ~2x faster LoRA on a T4, which is the difference between NB3
     # fitting in a lunch break and not. Installed HERE rather than in
