@@ -106,13 +106,26 @@ else:
     code(r"""
 trl_hist = baked("nb3_grpo_history",
                   "python scripts/bake_all.py --stage grpo")
-if art_hist and trl_hist:
+# Draw whichever curves exist. Requiring BOTH meant that on a T4 -- where ART
+# cannot train at all -- this cell showed nothing, including the TRL run that
+# NB3 really did produce. One measured line with the gap named is a better
+# comparison than an empty panel.
+if trl_hist or art_hist:
     fig, ax = plt.subplots(figsize=(9, 4))
-    ax.plot([h["step"] for h in trl_hist if "reward" in h],
-            [h["reward"] for h in trl_hist if "reward" in h],
-            label="TRL GRPOTrainer (NB3)", color="#4C72B0", lw=1.8)
-    ax.plot([h["step"] for h in art_hist], [h["reward"] for h in art_hist],
-            label="OpenPipe ART (this notebook)", color="#DD8452", lw=1.8)
+    if trl_hist:
+        pts = [(h["step"], h["reward"]) for h in trl_hist if "reward" in h]
+        ax.plot([p[0] for p in pts], [p[1] for p in pts],
+                label="TRL GRPOTrainer (NB3)", color="#4C72B0", lw=1.8)
+    if art_hist:
+        ax.plot([h["step"] for h in art_hist], [h["reward"] for h in art_hist],
+                label="OpenPipe ART (this notebook)", color="#DD8452", lw=1.8)
+    else:
+        ax.plot([], [], color="#DD8452", lw=1.8, ls="--",
+                label="OpenPipe ART -- not run (needs megatron/vLLM)")
+        ax.text(0.5, 0.5, "ART line missing:\nlocal backend needs a\nmegatron/vLLM stack "
+                          "this T4\ncannot provide",
+                transform=ax.transAxes, ha="center", va="center",
+                fontsize=9, color="#8C8C8C", style="italic")
     ax.set_xlabel("step"); ax.set_ylabel("mean reward")
     ax.set_title("Same reward, same data, same prompts -- only the framework differs")
     ax.legend()
@@ -120,6 +133,10 @@ if art_hist and trl_hist:
         ax.text(0.99, 0.02, "pre-baked replay", transform=ax.transAxes,
                 ha="right", fontsize=8, color="#8C8C8C", style="italic")
     plt.tight_layout(); plt.show()
+    if not art_hist:
+        print("Only the TRL curve is measured here. The ART line is what you")
+        print("would get on hardware that can host its local backend -- the")
+        print("code above is unchanged and is what you would run there.")
 """),
     md(r"""
 ## 3. The punchline
