@@ -174,16 +174,32 @@ def grpo_dashboard(history: list[dict], prebaked: bool = False,
     """
     use_house_style()
     fig, axes = plt.subplots(2, 3, figsize=(15, 7))
+    # Each panel lists the key ALIASES it will accept. TRL has renamed these
+    # across versions -- `completion_length` became `completions/mean_length`,
+    # zero-advantage became `frac_reward_zero_std` -- and a renamed key does not
+    # error, it silently draws an empty panel. Three of these six were blank
+    # against TRL 0.24 for exactly that reason.
+    # (alias, label) pairs per panel, tried in order. TRL renames these across
+    # versions and a renamed key does not error -- it silently draws an empty
+    # panel, which is how four of these six came to be blank. The label travels
+    # WITH the key: panel 4 falls back to reward_std, and that is a different
+    # quantity from a zero-advantage fraction, so it must not keep the old
+    # title. A mislabelled axis is worse than a missing one.
     panels = [
-        ("reward", "mean reward", None),
-        ("kl", "KL to reference", None),
-        ("completion_length", "mean completion length", None),
-        ("frac_zero_advantage", "fraction of zero-advantage groups", None),
-        ("grad_norm", "gradient norm", None),
-        ("val_accuracy", "held-out val accuracy", baseline),
+        ([("reward", "mean reward")], None),
+        ([("kl", "KL to reference")], None),
+        ([("completions/mean_length", "mean completion length"),
+          ("completion_length", "mean completion length")], None),
+        ([("frac_reward_zero_std", "fraction of zero-advantage groups"),
+          ("frac_zero_advantage", "fraction of zero-advantage groups"),
+          ("reward_std", "reward spread within group (0 = no signal)")], None),
+        ([("grad_norm", "gradient norm")], None),
+        ([("val_accuracy", "held-out val accuracy")], baseline),
     ]
     xs = [h.get("step", i) for i, h in enumerate(history)]
-    for ax, (key, label, base) in zip(axes.ravel(), panels):
+    for ax, (choices, base) in zip(axes.ravel(), panels):
+        key, label = next(((k, lb) for k, lb in choices
+                           if any(k in h for h in history)), choices[0])
         ys = [h.get(key) for h in history]
         pts = [(a, b) for a, b in zip(xs, ys) if b is not None]
         if pts:

@@ -254,6 +254,66 @@ def t4_grpo_config(output_dir: str, num_generations: int = 8, **overrides):
 # Guardrails
 # ===========================================================================
 
+def val_accuracy_callback(val_tasks: list[dict], every: int = 10,
+                          n: int = 16, max_new_tokens: int = 192):
+    """Log held-out accuracy into `log_history`, so the dashboard has a truth axis.
+
+    NB3's structural advice is "early-stop on held-out validation accuracy, not
+    on training reward" -- and nothing in this repo measured validation accuracy.
+    Every panel that plotted it drew "no 'val_accuracy' logged", which is the
+    worst version of the mistake: the notebook argued for a discipline it did
+    not itself practise.
+
+    Reward can rise while the policy gets worse (that is NB6 in one sentence),
+    so this is the only series on the dashboard that is not self-reported by the
+    thing being measured. It costs `n` greedy generations every `every` steps --
+    on a 60-step run with the defaults, ~96 extra generations.
+    """
+    from transformers import TrainerCallback
+
+    from .db import score_sql
+    from .agents import baseline_prompt, extract_sql
+
+    class _ValAccuracy(TrainerCallback):
+        def on_step_end(self, args, state, control, model=None, **kw):
+            step = state.global_step
+            if model is None or step == 0 or step % every:
+                return
+            tok = kw.get("processing_class") or kw.get("tokenizer")
+            if tok is None:
+                return
+            import torch
+
+            was_cache, was_training = model.config.use_cache, model.training
+            model.config.use_cache = True
+            model.eval()
+            hits = 0
+            try:
+                for t in val_tasks[:n]:
+                    text = tok.apply_chat_template(
+                        baseline_prompt(t["question"]), tokenize=False,
+                        add_generation_prompt=True)
+                    enc = tok(text, return_tensors="pt").to(model.device)
+                    with torch.no_grad():
+                        out = model.generate(
+                            **enc, max_new_tokens=max_new_tokens, do_sample=False,
+                            pad_token_id=tok.pad_token_id or tok.eos_token_id)
+                    got = tok.decode(out[0][enc["input_ids"].shape[1]:],
+                                     skip_special_tokens=True)
+                    hits += bool(score_sql(extract_sql(got), t["gold"]))
+            except Exception as e:  # noqa: BLE001 - never kill a run over a metric
+                print(f"[trainers] val_accuracy eval failed at step {step}: {e}")
+                return
+            finally:
+                model.config.use_cache = was_cache
+                model.train(was_training)
+            acc = hits / max(len(val_tasks[:n]), 1)
+            state.log_history.append({"step": step, "val_accuracy": acc})
+            print(f"[val] step {step}: {hits}/{len(val_tasks[:n])} = {acc:.3f}")
+
+    return _ValAccuracy()
+
+
 def non_finite_loss_callback():
     """Abort loudly on a NaN/Inf loss instead of producing a flat curve.
 

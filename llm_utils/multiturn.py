@@ -117,14 +117,15 @@ def _trajectory_loss(model, tok, traj, adv: float, max_len: int):
     return -(adv * (tok_logp * m).sum() / m.sum().clamp(min=1.0))
 
 
-def evaluate_turns(policy, tasks: list[dict], max_turns: int = 4) -> dict:
+def evaluate_turns(policy, tasks: list[dict], max_turns: int = 4,
+                   hide_schema: bool = True) -> dict:
     """Greedy pass for the curve: accuracy and turns on held-out tasks."""
     from .rollout import rollout_multi_turn
 
     if not tasks:
         return {"accuracy": 0.0, "mean_turns": 0.0}
-    trajs = [rollout_multi_turn(policy, t, max_turns=max_turns, temperature=0.0)
-             for t in tasks]
+    trajs = [rollout_multi_turn(policy, t, max_turns=max_turns, temperature=0.0,
+                                hide_schema=hide_schema) for t in tasks]
     n = len(trajs)
     return {
         "accuracy": sum(1 for t in trajs if t.correct) / n,
@@ -137,7 +138,8 @@ def train_multi_turn(model, tok, tasks: list[dict], val_tasks: list[dict] | None
                      max_turns: int = 4, temperature: float = 0.9,
                      lr: float = 1e-5, max_len: int = 1024,
                      eval_every: int = 5, eval_n: int = 16,
-                     weights: dict | None = None, verbose: bool = True) -> list[dict]:
+                     weights: dict | None = None, hide_schema: bool = True,
+                     verbose: bool = True) -> list[dict]:
     """Run multi-turn GRPO and return a log_history-shaped list.
 
     Each entry: {"step", "reward", "mean_turns", "val_accuracy"} -- the keys
@@ -171,7 +173,7 @@ def train_multi_turn(model, tok, tasks: list[dict], val_tasks: list[dict] | None
                  for i in range(tasks_per_step)]
         groups = batch_rollout(policy, batch, G=G, temperature=temperature,
                                multi_turn=True, max_turns=max_turns,
-                               weights=weights)
+                               weights=weights, hide_schema=hide_schema)
 
         opt.zero_grad(set_to_none=True)
         n_terms, total = 0, 0.0
@@ -200,7 +202,8 @@ def train_multi_turn(model, tok, tasks: list[dict], val_tasks: list[dict] | None
         }
         if val_tasks and (step % eval_every == 0 or step == steps):
             last_acc = evaluate_turns(policy, val_tasks[:eval_n],
-                                      max_turns=max_turns)["accuracy"]
+                                      max_turns=max_turns,
+                                      hide_schema=hide_schema)["accuracy"]
         rec["val_accuracy"] = last_acc
         history.append(rec)
         if verbose:

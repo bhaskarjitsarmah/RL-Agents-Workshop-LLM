@@ -149,9 +149,21 @@ class SQLEnv:
     TOOLS = ("list_tables", "describe_table", "sample_rows", "run_query")
 
     def __init__(self, db_path: str = DB_PATH, max_turns: int = 4,
-                 schema_text: str = SCHEMA_TEXT, row_limit: int = 10):
+                 schema_text: str = SCHEMA_TEXT, row_limit: int = 10,
+                 hide_schema: bool = False):
+        """`hide_schema=True` withholds the column names.
+
+        With the full schema in the prompt -- the default, and what the eval
+        harness sends -- a tool call buys the policy NOTHING it does not already
+        have, while costing it the efficiency penalty. Inspecting is then
+        strictly irrational, every episode is one turn, and "multi-turn RL"
+        trains on single-turn data. Hiding the columns is what makes the tool
+        loop load-bearing: look first (cost 0.05) or guess a column name and
+        lose the whole exec_match term.
+        """
         self.db_path = db_path
         self.max_turns = max_turns
+        self.hide_schema = hide_schema
         self.schema_text = schema_text
         self.row_limit = row_limit
         self.task: dict | None = None
@@ -164,11 +176,15 @@ class SQLEnv:
         self.task = task
         self.turn = 0
         self.done = False
-        self.steps = [
-            Step("system", MULTITURN_SYSTEM),
-            Step("user", f"Database schema:\n{self.schema_text}\n\n"
-                         f"Question: {task['question']}"),
-        ]
+        if self.hide_schema:
+            user = ("Database tables: customers, products, orders, order_items\n"
+                    "Column names are NOT given. Use describe_table to inspect a\n"
+                    "table before you answer.\n\n"
+                    f"Question: {task['question']}")
+        else:
+            user = (f"Database schema:\n{self.schema_text}\n\n"
+                    f"Question: {task['question']}")
+        self.steps = [Step("system", MULTITURN_SYSTEM), Step("user", user)]
         return self.observation()
 
     def observation(self) -> list[dict]:
@@ -242,11 +258,16 @@ class SQLEnv:
             if table not in ("customers", "products", "orders", "order_items"):
                 return f"No such table: {table!r}. Tables: customers, products, orders, order_items"
             rows, err = safe_run_sql(f"PRAGMA table_info({table})", self.db_path)
-            if err or not rows:
-                # PRAGMA is blocked by our read-only guard; fall back to the
-                # schema text the model already has, rather than leaking an error.
-                return f"Columns of {table}: see the schema in the first message."
-            return f"{table}(" + ", ".join(r[1] for r in rows) + ")"
+            if not err and rows:
+                return f"{table}(" + ", ".join(r[1] for r in rows) + ")"
+            # PRAGMA is blocked by the read-only guard, so read the columns out
+            # of SCHEMA_TEXT instead. The old fallback said "see the schema in
+            # the first message" -- useless with hide_schema=True, where that
+            # message is exactly what the policy does not have.
+            for line in SCHEMA_TEXT.splitlines():
+                if line.strip().startswith(f"{table}("):
+                    return line.strip()
+            return f"No column information for {table!r}."
         if name == "sample_rows":
             table = str(args.get("table", ""))
             if table not in ("customers", "products", "orders", "order_items"):
@@ -304,7 +325,8 @@ def rollout_single_turn(policy: Policy, task: dict, temperature: float = 0.7,
 def rollout_multi_turn(policy: Policy, task: dict, env: SQLEnv | None = None,
                        max_turns: int = 4, temperature: float = 0.7,
                        max_new_tokens: int = 256,
-                       weights: dict | None = None) -> Trajectory:
+                       weights: dict | None = None,
+                       hide_schema: bool = False) -> Trajectory:
     """Let the policy inspect the database before committing to an answer.
 
     The efficiency penalty in the reward is what stops this degenerating into
@@ -312,7 +334,7 @@ def rollout_multi_turn(policy: Policy, task: dict, env: SQLEnv | None = None,
     turns that penalty up to 0.30 and shows the policy abandoning tools entirely
     -- a benign, live demonstration of reward mis-specification.
     """
-    env = env or SQLEnv(max_turns=max_turns)
+    env = env or SQLEnv(max_turns=max_turns, hide_schema=hide_schema)
     t0 = time.time()
     env.reset(task)
     sql, reason, tool_calls = "", "max_turns", 0

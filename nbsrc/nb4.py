@@ -137,7 +137,7 @@ MT_STEPS = 15          # a demonstration you can watch; the pre-baked run is 100
 
 mt_hist = load_result("nb4_multiturn")
 if mt_hist is None and CAP["gpu"]:
-    from llm_utils.config import base_model_4bit, empty_cache
+    from llm_utils.config import ADAPTER_DIR, base_model_4bit, empty_cache
     from llm_utils.multiturn import train_multi_turn
     from llm_utils.trainers import load_4bit_policy
 
@@ -152,6 +152,12 @@ if mt_hist is None and CAP["gpu"]:
             val_tasks=read_jsonl("data/tasks_val_gen.jsonl"),
             steps=MT_STEPS, G=4, tasks_per_step=2, max_turns=4)
         save_result("nb4_multiturn", mt_hist)
+        # Save before freeing. NB3 does this; NB4 did not, so every multi-turn
+        # run so far has trained a policy and then deleted it -- nothing
+        # downstream could load it, and nothing could check whether the weights
+        # had moved at all.
+        mt_model.save_pretrained(os.path.join(ADAPTER_DIR, "multiturn"))
+        print(f"adapter -> {os.path.join(ADAPTER_DIR, 'multiturn')}")
         del mt_model; empty_cache()
     except Exception as e:      # must not kill Run-all
         mt_hist = None
@@ -255,7 +261,7 @@ BUDGET_TASKS = 24
 
 budget = load_result("nb4_turn_budget")
 if budget is None and CAP["gpu"]:
-    from llm_utils.config import base_model_4bit, empty_cache
+    from llm_utils.config import ADAPTER_DIR, base_model_4bit, empty_cache
     from llm_utils.local_llm import LocalLM
     from llm_utils.multiturn import policy_from_model
 

@@ -165,7 +165,8 @@ That is not a scheduling gimmick - it is what RL engineering actually feels
 like, and pretending otherwise would misrepresent the job.
 """),
     code(r"""
-from llm_utils.trainers import load_4bit_policy, non_finite_loss_callback, vram_budget
+from llm_utils.trainers import (load_4bit_policy, non_finite_loss_callback,
+                                val_accuracy_callback, vram_budget)
 
 grpo_hist = None
 if CAP["gpu"]:
@@ -176,7 +177,11 @@ if CAP["gpu"]:
     trainer = GRPOTrainer(
         model=model, reward_funcs=reward_fns, train_dataset=ds,
         args=t4_grpo_config("out/grpo", num_generations=8, max_steps=60),
-        callbacks=[non_finite_loss_callback()],
+        # The dashboard's sixth panel, and the one thing on it that is not
+        # self-reported by the policy. Reward can rise while the model gets
+        # worse; only this can tell you.
+        callbacks=[non_finite_loss_callback(),
+                   val_accuracy_callback(val, every=15, n=16)],
     )
     trainer.train()
     vram_budget("after train")
