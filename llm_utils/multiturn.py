@@ -118,7 +118,7 @@ def _trajectory_loss(model, tok, traj, adv: float, max_len: int):
 
 
 def evaluate_turns(policy, tasks: list[dict], max_turns: int = 4,
-                   hide_schema: bool = True) -> dict:
+                   hide_schema: bool = False) -> dict:
     """Greedy pass for the curve: accuracy and turns on held-out tasks."""
     from .rollout import rollout_multi_turn
 
@@ -138,7 +138,7 @@ def train_multi_turn(model, tok, tasks: list[dict], val_tasks: list[dict] | None
                      max_turns: int = 4, temperature: float = 0.9,
                      lr: float = 1e-5, max_len: int = 1024,
                      eval_every: int = 5, eval_n: int = 16,
-                     weights: dict | None = None, hide_schema: bool = True,
+                     weights: dict | None = None, hide_schema: bool = False,
                      verbose: bool = True) -> list[dict]:
     """Run multi-turn GRPO and return a log_history-shaped list.
 
