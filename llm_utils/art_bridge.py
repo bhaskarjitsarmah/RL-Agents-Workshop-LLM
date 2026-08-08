@@ -41,6 +41,27 @@ from .rewards import composite_reward
 from .rollout import Trajectory
 
 
+def _local_backend_cls():
+    """`LocalBackend`, wherever this ART version keeps it.
+
+    It was a top-level re-export; in current ART it lives in `art.local` (and
+    `art.local.backend`). The probe used to check `hasattr(art, "LocalBackend")`
+    alone, so a perfectly working install reported the name missing, NB5 set
+    ART_OK=False, and every live cell silently fell back to a replay that does
+    not exist. Returns None when genuinely absent.
+    """
+    import importlib
+
+    for mod, attr in (("art", "LocalBackend"),
+                      ("art.local", "LocalBackend"),
+                      ("art.local.backend", "LocalBackend")):
+        try:
+            return getattr(importlib.import_module(mod), attr)
+        except Exception:  # noqa: BLE001 - try the next location
+            continue
+    return None
+
+
 def art_available() -> bool:
     try:
         import art  # noqa: F401
@@ -64,8 +85,10 @@ def art_probe() -> dict:
     print(f"art.__version__ = {info['version']}")
     print("public names:", names)
     expected = ["TrainableModel", "Trajectory", "TrajectoryGroup", "TrainConfig",
-                "LocalBackend", "gather_trajectory_groups"]
+                "gather_trajectory_groups"]
     missing = [n for n in expected if not hasattr(art, n)]
+    if _local_backend_cls() is None:      # checked by import, not by hasattr
+        missing.append("LocalBackend")
     info["missing_expected"] = missing
     if missing:
         print("\n!! not on the top-level namespace:", missing)
@@ -176,7 +199,11 @@ async def run_art_training(tasks: list[dict], project: str = "rl-weights-worksho
 
     import art
 
-    backend = art.LocalBackend()
+    cls = _local_backend_cls()
+    if cls is None:
+        raise RuntimeError("ART is installed but LocalBackend is not importable "
+                           "from art, art.local or art.local.backend.")
+    backend = cls()
     model = art.TrainableModel(
         name=model_name, project=project,
         base_model=base_model_id or base_model(),
