@@ -350,12 +350,12 @@ def stage_pathologies(force: bool) -> None:
     from llm_utils.rewards import make_trl_reward_fns
     from llm_utils.trainers import load_4bit_policy, t4_grpo_config
 
-    # 30 steps, not 60. Every one of these fails in its first third -- a
-    # temperature of 0.01 has zero spread from step 1, a 24-token cap truncates
-    # immediately -- so the extra 30 steps only extend a curve whose shape is
-    # already unmistakable, at ~14 GPU-minutes each. Raise BAKE_PATHOLOGY_STEPS
-    # if a curve does not read clearly.
-    n = int(os.environ.get("BAKE_PATHOLOGY_STEPS", "30"))
+    # 60 steps, matching the healthy run in NB3. The pathological curves are
+    # meant to be read side by side with that one, and a 30-step version would
+    # be compared against a 60-step baseline -- a difference in the x-axis that
+    # participants would have to be told to ignore. ~2 GPU-hours for all four.
+    # BAKE_PATHOLOGY_STEPS shortens it if you only need the shapes.
+    n = int(os.environ.get("BAKE_PATHOLOGY_STEPS", "60"))
     recipes = {
         "kl_blowup":      dict(beta=0.0, learning_rate=5e-4, max_steps=n),
         "length_collapse": dict(max_completion_length=24, beta=0.0, max_steps=n),
