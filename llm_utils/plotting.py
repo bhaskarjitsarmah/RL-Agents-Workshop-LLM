@@ -141,16 +141,43 @@ def scissors(history: list[dict], proxy_key: str = "proxy_reward",
     """
     use_house_style()
     fig, ax = plt.subplots()
+
+    # TRL logs the optimised reward as "reward"; this chart asked for
+    # "proxy_reward" and got a line of Nones -- an empty plot where NB6's
+    # headline belongs. Fall back to whatever the history actually carries, and
+    # plot only the points that exist so a metric logged every N steps still
+    # draws a line instead of vanishing between holes.
+    if not any(proxy_key in h for h in history):
+        proxy_key = next((k for k in ("reward", "proxy_reward")
+                          if any(k in h for h in history)), proxy_key)
+
+    def _series(key):
+        return [(h.get(x, i), h[key]) for i, h in enumerate(history)
+                if h.get(key) is not None]
+
+    pts = _series(proxy_key)
     xs = [h.get(x, i) for i, h in enumerate(history)]
-    ax.plot(xs, [h.get(proxy_key) for h in history], color=C_BAD, lw=2,
+    ax.plot([p[0] for p in pts], [p[1] for p in pts], color=C_BAD, lw=2,
             label="proxy reward (what we optimised)")
     ax.set_xlabel(x)
     ax.set_ylabel("proxy reward", color=C_BAD)
     ax.tick_params(axis="y", labelcolor=C_BAD)
 
     ax2 = ax.twinx()
-    ax2.plot(xs, [h.get(truth_key) for h in history], color=C_HARNESS, lw=2,
-             label="true val accuracy (what we wanted)")
+    tpts = _series(truth_key)
+    if tpts:
+        ax2.plot([p[0] for p in tpts], [p[1] for p in tpts], color=C_HARNESS,
+                 lw=2, marker="o", ms=4,
+                 label="true val accuracy (what we wanted)")
+    else:
+        # Without the truth axis there are no scissors, only a rising line --
+        # which is precisely the misreading this chart exists to prevent.
+        ax2.plot([], [], color=C_HARNESS, lw=2,
+                 label="true val accuracy -- NOT MEASURED")
+        ax.text(0.5, 0.5, "no val_accuracy in this run:\nthe proxy line alone is\n"
+                          "exactly what fools you",
+                transform=ax.transAxes, ha="center", va="center",
+                fontsize=10, color=C_BAD, style="italic")
     ax2.set_ylabel("true val accuracy", color=C_HARNESS)
     ax2.tick_params(axis="y", labelcolor=C_HARNESS)
     ax2.spines["top"].set_visible(False)

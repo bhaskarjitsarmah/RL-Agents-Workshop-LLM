@@ -432,15 +432,20 @@ def stage_hacked(force: bool) -> None:
 
     from llm_utils.datasets import to_grpo_dataset
     from llm_utils.rewards import make_hackable_reward_fns
-    from llm_utils.trainers import load_4bit_policy, t4_grpo_config
+    from llm_utils.trainers import (load_4bit_policy, t4_grpo_config,
+                                    val_accuracy_callback)
 
     if skip("nb6_hacked_history", force):
         return
     model, _ = load_4bit_policy()
     train = read_jsonl(os.path.join(DATA, "tasks_train_gen.jsonl"))
+    # The truth axis. Baking only the proxy reward produces half a scissors
+    # chart -- a rising line, which is the misreading NB6 exists to correct.
+    val = read_jsonl(os.path.join(DATA, "tasks_val_gen.jsonl"))
     tr = GRPOTrainer(model=model, reward_funcs=make_hackable_reward_fns(),
                      train_dataset=to_grpo_dataset(train),
-                     args=t4_grpo_config("out/hacked", max_steps=50))
+                     args=t4_grpo_config("out/hacked", max_steps=50),
+                     callbacks=[val_accuracy_callback(val, every=10, n=16)])
     tr.train()
     save_result("nb6_hacked_history", tr.state.log_history)
 

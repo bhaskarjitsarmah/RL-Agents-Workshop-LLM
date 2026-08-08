@@ -98,7 +98,43 @@ Now train against that proxy for 50 steps, logging **both** the proxy reward we
 optimise and the true validation accuracy we actually care about.
 """),
     code(r"""
-hacked = baked("nb6_hacked_history",
+# Live. This chart needs BOTH lines -- the proxy we optimise and the truth we
+# actually want -- and the truth has to be measured, not read out of TRL's logs.
+# val_accuracy_callback scores held-out tasks with the REAL reward every few
+# steps while training optimises the hackable proxy. Without it there is no
+# scissors, only a rising line, which is the exact misreading this cell exists
+# to prevent.
+HACK_STEPS = 50
+
+hacked = load_result("nb6_hacked_history")
+if hacked is None and CAP["gpu"]:
+    from trl import GRPOTrainer
+    from llm_utils.config import empty_cache
+    from llm_utils.datasets import to_grpo_dataset
+    from llm_utils.rewards import make_hackable_reward_fns
+    from llm_utils.trainers import (load_4bit_policy, t4_grpo_config,
+                                    val_accuracy_callback)
+    try:
+        hk_train = read_jsonl("data/tasks_train_gen.jsonl")
+        hk_val = read_jsonl("data/tasks_val_gen.jsonl")
+        print(f"Training {HACK_STEPS} steps against the hackable proxy, scoring")
+        print("held-out accuracy with the REAL reward every 10 steps.\n")
+        hk_model, _ = load_4bit_policy()
+        hk_tr = GRPOTrainer(
+            model=hk_model, reward_funcs=make_hackable_reward_fns(),
+            train_dataset=to_grpo_dataset(hk_train),
+            args=t4_grpo_config("out/hacked", max_steps=HACK_STEPS),
+            callbacks=[val_accuracy_callback(hk_val, every=10, n=16)])
+        hk_tr.train()
+        hk_tr.save_model("out/hacked")
+        hacked = hk_tr.state.log_history
+        save_result("nb6_hacked_history", hacked)
+        del hk_model, hk_tr; empty_cache()
+    except Exception as e:
+        hacked = None
+        print(f"Hacked run did not finish: {type(e).__name__}: {e}")
+elif hacked is None:
+    hacked = baked("nb6_hacked_history",
                   "python scripts/bake_all.py --stage hacked")
 if hacked:
     from llm_utils.plotting import scissors
@@ -121,7 +157,25 @@ What did the hacked policy actually learn to say?
     code(r"""
 from llm_utils import detect_reward_hacks
 
-hacked_preds = baked("nb6_hacked_predictions",
+# The gallery of degenerate winners: what the hacked policy actually says.
+# Generated from the adapter the cell above just trained, so it is this run's
+# damage rather than someone else's.
+hacked_preds = load_result("nb6_hacked_predictions")
+if hacked_preds is None and CAP["gpu"] and hacked:
+    from llm_utils.config import base_model_4bit, empty_cache
+    from llm_utils.local_llm import LocalLM, make_local_agent
+    try:
+        hp_lm = LocalLM(base_model_4bit(), adapter="out/hacked")
+        hp_agent = make_local_agent(hp_lm)
+        hacked_preds = [hp_agent(t["question"])
+                        for t in read_jsonl("data/tasks_train_gen.jsonl")[:60]]
+        save_result("nb6_hacked_predictions", hacked_preds)
+        hp_lm.unload(); empty_cache()
+    except Exception as e:
+        hacked_preds = None
+        print(f"Could not sample the hacked policy: {type(e).__name__}: {e}")
+elif hacked_preds is None:
+    hacked_preds = baked("nb6_hacked_predictions",
                   "python scripts/bake_all.py --stage hacked")
 if hacked_preds:
     rep = detect_reward_hacks(hacked_preds)
